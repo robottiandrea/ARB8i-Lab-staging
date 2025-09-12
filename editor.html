@@ -1,0 +1,975 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ARB8i Lab — Editor</title>
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles/common.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f1115">
+
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Doodles">
+
+<!-- libreria condivisa (normalizeId, wireClear, createIdPreview) -->
+<script src="./scripts/common.js"></script>
+
+<script>
+  const SITE_URL = 'https://arb8i.xyz';
+  try { new Function('return 0?.x'); } catch { window.OC_UNSUPPORTED = true; }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  }
+</script>
+
+<style>
+  
+  /* layout pagina editor */
+  .wrap{ max-width:820px; margin:0 auto; padding:28px; }
+
+  /* header editor */
+  .header{ display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  .nav-back{
+    display:inline-flex; align-items:center; gap:8px;
+    text-decoration:none; color:var(--acc); opacity:.85;
+  }
+  .nav-back:hover{ opacity:1; }
+  h1{ margin:0; font-size:20px; font-weight:600; }
+
+  .badge{ display:inline-block; margin-left:8px; padding:3px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+
+  /* card (base in common.css): qui solo padding specifico */
+  .card{ padding:22px; }
+
+  /* stato sotto i controlli */
+  .status{ min-height:22px; color:var(--muted); font-size:13px; margin-top:10px; }
+
+  /* viewer */
+  :root{
+    --frame-max-h: 70vh;      /* altezza max immagine (JS la aggiorna) */
+    --frame-w: 640px;         /* larghezza iniziale della frame (JS la aggiorna) */
+  }
+  
+  .frame{
+    position:relative;
+    width:auto;              /* ← niente 100% fisso */
+    max-width:100%;          /* resta responsiva */
+    margin:18px auto 8px;
+    border:1px dashed var(--border);
+    border-radius:12px;
+    background:#0d1016;
+    transition: width .12s ease;
+  }
+
+  
+  /* l'immagine riempie la frame in larghezza ma rispetta l'altezza max */
+  #composite{
+    display:block;
+    width:100%;
+    height:auto;
+    max-height: var(--frame-max-h);
+    border-radius:12px;
+    object-fit: contain;
+  }
+  #composite.is-example{ filter: grayscale(50%) opacity(.9); }
+
+
+  .example-badge{
+    position:absolute; top:8px; left:8px;
+    padding:4px 8px; border-radius:10px; font-size:11px; font-weight:700;
+    color:#fff; background:rgba(0,0,0,.55);
+    backdrop-filter: blur(2px);
+    z-index:2; pointer-events:none;
+  }
+  .oops-badge{
+    position:absolute; top:8px; right:8px;
+    padding:4px 10px; border-radius:999px;
+    font-size:12px; font-weight:800;
+    color:#fff; background:#ff4d4f;
+    box-shadow:0 6px 18px rgba(0,0,0,.28);
+    z-index:3; pointer-events:none;
+    letter-spacing:.2px;
+  }
+</style>
+
+</head>
+<body>
+  <main class="wrap">
+    <div class="header">
+      <a class="nav-back" href="index.html">← Gallery</a>
+      <div>
+        <h1 id="ovName">Overlay</h1>
+        <div class="sub"><span id="ovAuthor"></span><span id="ovBadge" class="badge" style="display:none"></span></div>
+      </div>
+    </div>
+
+    <section class="card">
+      
+      <!-- riga uniforme: preview SX → input con X (maxlength 4) → bottone -->
+      <div class="hero-id">
+        <label for="tokenId" class="form-label">Doodles ID</label>
+      
+        <div class="hero-id-row">
+          <div id="idRowHost"></div>
+          <div class="id-cta"><!-- nessun popover in editor --></div>
+        </div>
+      
+        <p class="sub" style="margin:6px 0 0">
+          Missing your Doodle ID?
+          <a id="viewerLink" class="back shimmer idhelp" href="./Doodles_trait-viewer.html?source=editor&overlay=<OVERLAY_ID>">Find it here!</a>
+        </p>
+      </div>
+
+
+      <div id="status" class="status"></div>
+
+      <div class="frame">
+        <div id="exampleBadge" class="example-badge" aria-hidden="true">EXAMPLE</div>
+        <div id="oopsBadge" class="oops-badge" style="display:none" aria-hidden="true"></div>
+        <img id="composite" alt="Preview">
+      </div>
+
+      <!-- Share controls (solo mobile, mostrato da JS) -->
+      <div id="shareRow" class="share-row" style="display:none; gap:10px; justify-content:center; margin:12px 0 0;">
+          <button id="shareX" class="id-btn" type="button" disabled>Share!</button>
+          <button id="copyImg" class="id-btn" type="button">Copy PNG</button>
+      </div>
+
+    </section>
+    
+    <!-- Footer fuori dal frame -->
+    <div id="madeBy" class="footer-madeby" style="display:none">
+      <a id="madeByLink" class="shimmer madeby-link" href="#" target="_blank" rel="noopener">
+        made by&nbsp;<span id="mbName">author</span><span id="mbSep">–</span><span id="mbHandle">@handle</span>
+      </a>
+    </div>
+
+  </main>
+
+  <!-- Popup centrale (riutilizzabile: Cooking…, Copied!, ecc.) -->
+<div id="centerPop" class="center-pop" role="dialog" aria-modal="true" aria-live="assertive">
+  <div class="box">
+    <div id="cpTitle" class="title"></div>
+    <p id="cpDesc" class="desc"></p>
+  </div>
+</div>
+
+<script>
+/* ===== Network (RPC/IPFS) ===== */
+const DEFAULT_CONTRACT = new URLSearchParams(location.search).get('contract')
+  || '0x8a90CAb2b38dba80c64b7734e58Ee1dB38B8992e';
+
+const RPCS = [
+  'https://cloudflare-eth.com',
+  'https://eth.drpc.org',
+  'https://eth.llamarpc.com',
+  'https://rpc.ankr.com/eth',
+  'https://eth.public-rpc.com',
+];
+const IPFS_GW = [
+  'https://ipfs.io/ipfs/',
+  'https://cloudflare-ipfs.com/ipfs/',
+  'https://dweb.link/ipfs/',
+  'https://gateway.pinata.cloud/ipfs/',
+];
+
+/* ===== DOM ===== */
+const $ = s => document.querySelector(s);
+const statusEl = $('#status');
+const imgEl = $('#composite');
+const ovName = $('#ovName');
+const ovAuthor = $('#ovAuthor');
+const ovBadge = $('#ovBadge');
+const madeBy = $('#madeBy');
+const madeByLink = $('#madeByLink');
+const mbName = $('#mbName');
+const mbHandle = $('#mbHandle');
+const mbSep = $('#mbSep');
+const exBadge = document.querySelector('#exampleBadge');
+
+
+const HAD_ID_AT_LOAD = new URLSearchParams(location.search).has('id');
+// === Monta la riga ID nell'Editor (stessa UI dell'index, testo diverso) ===
+// === Monta la riga ID nell'Editor (stessa UI dell'index, testo diverso) ===
+const OCNS = window.OC; // usa window.OC per evitare ReferenceError se OC non esiste
+
+if (OCNS && typeof OCNS.mountIdRow === 'function') {
+  OCNS.mountIdRow('#idRowHost', {
+    inputId: 'tokenId',
+    previewId: 'idPreview',
+    buttonId: 'go',
+    buttonText: 'Cook it!',
+    buttonClass: 'id-btn',
+    buttonContainer: '.id-cta',
+    showPreview: true,
+    placeholder: '8929',
+    maxLen: 4
+  });
+} else {
+  console.warn('OC.mountIdRow non disponibile: salto il montaggio UI ID.');
+}
+
+let tokenEl = document.getElementById('tokenId');
+let idPreview = document.getElementById('idPreview');
+
+/* ===== ID control (unico) ===== */
+let idCtrl = null;
+if (OCNS && typeof OCNS.initIdControl === 'function') {
+  idCtrl = OCNS.initIdControl({
+    input:  '#tokenId',
+    preview:'#idPreview',
+    button: '#go',
+    defaultId: '8929',
+    max: 9999,
+    persistKey: 'lastId',
+    urlParam:  'id',
+    onApply(){
+      openImage();
+    },
+    onClear(){
+      setStatus('');
+      setShareVisible(false);
+      idCtrl && idCtrl.resetPreview();
+    }
+  });
+} else {
+  console.warn('OC.initIdControl non disponibile.');
+}
+
+// --- Rilevamento: telefono touch "stretto", escludendo iPad ---
+function isIPadLike(){
+  const ua = navigator.userAgent || '';
+  const isiPadUA = /iPad/i.test(ua);
+  const macTouch = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return isiPadUA || macTouch; // iPadOS spesso appare come Mac + touch
+}
+
+// Schermo "stretto" = telefono (usiamo dimensione fisica dello schermo)
+function isNarrowScreen(){
+  const sw = Math.min(window.screen.width, window.screen.height);
+  return sw <= 820; // iPad esce da questa soglia
+}
+
+function isNarrowTouchPhone(){
+  const coarse = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+  return coarse && isNarrowScreen() && !isIPadLike();
+}
+
+// Stato corrente (ricalcolabile a rotazione/orientamento)
+let IS_NARROW_TOUCH_PHONE = isNarrowTouchPhone();
+
+function applyMobileNaturalMode(){
+  // Disattiva forzature: lascia fluido, con scroll naturale
+  document.documentElement.style.setProperty('--frame-max-h', 'none');
+  const frame = document.querySelector('.frame');
+  if (frame){
+    frame.style.width = '';
+    frame.style.maxWidth = '';
+    frame.style.transition = 'none';
+  }
+}
+
+function applyDesktopManagedMode(){
+  const frame = document.querySelector('.frame');
+  if (frame){
+    frame.style.transition = 'width .12s ease';
+  }
+  // Ricalcola normalmente (usa la tua funzione)
+  updateFrameMaxHeight();
+}
+
+// Debounce utilità
+const debouncedReeval = (() => {
+  let to;
+  return () => { clearTimeout(to); to = setTimeout(reevaluateMode, 80); };
+})();
+
+function reevaluateMode(){
+  const prev = IS_NARROW_TOUCH_PHONE;
+  IS_NARROW_TOUCH_PHONE = isNarrowTouchPhone();
+  if (IS_NARROW_TOUCH_PHONE !== prev){
+    if (IS_NARROW_TOUCH_PHONE) applyMobileNaturalMode();
+    else applyDesktopManagedMode();
+  }else{
+    if (!IS_NARROW_TOUCH_PHONE) updateFrameMaxHeight();
+  }
+}
+  
+
+
+/* ===== State ===== */
+/* ===== Share (mobile only) ===== */
+let MOBILE_SHARE = false;
+
+function isMobileLike(){
+  const ua = navigator.userAgent;
+  const isIPhone  = /iPhone|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  // iPadOS spesso finge "Macintosh" ma ha touch
+  const isIPad    = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && 'ontouchend' in document);
+  return isIPhone || isAndroid || isIPad;
+}
+
+function isAppleStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+  
+let OVERLAYS=null, currentCfg=null;
+let NAME_TO_HEX=null, META=null;
+
+/* ===== Utils ===== */
+function setShareVisible(visible){
+  const row = document.getElementById('shareRow');
+  const btn = document.getElementById('shareX');
+  if (!row || !btn) return;
+  row.style.visibility    = visible ? 'visible' : 'hidden';
+  row.style.pointerEvents = visible ? 'auto' : 'none';
+  btn.disabled = !visible;
+
+  updateFrameMaxHeight(); // <— ricalcola subito dopo il toggle
+}
+
+
+function setStatus(t){ statusEl.textContent = t || ''; }
+function pad32hex(n){ const h = BigInt(n).toString(16); return h.padStart(64,'0'); }
+function decodeAbiString(hexdata){
+  if(!hexdata || !hexdata.startsWith('0x')) return null;
+  const h = hexdata.slice(2); if(h.length<128) return null;
+  const length = parseInt(h.slice(64,128),16);
+  const s = h.slice(128, 128 + length*2);
+  try{ const bytes = s.match(/.{1,2}/g).map(b=>parseInt(b,16)); return new TextDecoder().decode(new Uint8Array(bytes)); }catch{ return null; }
+}
+async function rpcCall(method, params){
+  const payload={jsonrpc:'2.0',id:1,method,params}, headers={'Content-Type':'application/json','Accept':'application/json'};
+  for(const url of RPCS){ try{ const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(payload)}); if(!r.ok) continue; const d=await r.json(); if(d && !d.error) return d.result; }catch{} }
+  return null;
+}
+function ipfsUrls(uri){ if(typeof uri!=='string') return []; if(uri.startsWith('ipfs://')){ const p=uri.replace('ipfs://',''); return IPFS_GW.map(g=>g+p); } return [uri]; }
+async function fetchJsonAny(urls){ for(const u of urls){ try{ const r=await fetch(u,{headers:{'Accept':'application/json'}}); if(r.ok) return await r.json(); }catch{} } return null; }
+async function fetchBlobAny(urls){ for(const u of urls){ try{ const r=await fetch(u); if(r.ok) return await r.blob(); }catch{} } return null; }
+
+/* ===== Manifest & maps ===== */
+async function loadManifest(){
+  for(const url of ['./overlays/overlays.json','./overlays.json']){
+    try{ const r=await fetch(url); if(r.ok){ OVERLAYS=await r.json(); return; } }catch{}
+  }
+  throw new Error('overlays.json not found');
+}
+function getCfg(id){ return OVERLAYS?.items?.find(o=>o.id===id) || null; }
+
+function parseCsv(text){
+  const map = {};
+  text
+    .replace(/\ufeff/g,'')            // BOM
+    .replace(/\r\n?/g,'\n')
+    .split('\n')
+    .forEach(line=>{
+      let s = line.trim();
+      if(!s) return;
+      // split su ; , o :
+      const parts = s.split(/[,;:]\s*/);
+      if(parts.length < 2) return;
+      const name = (parts[0] || '').replace(/^"+|"+$/g,'').trim();
+      let raw   = (parts.slice(1).join(':') || '').replace(/^"+|"+$/g,'').trim();
+      if(!name || !raw) return;
+      if (/^name$/i.test(name) && /^hex$/i.test(raw)) return; // header
+
+      // normalizza valore: doppi #, spazi intorno a |
+      raw = raw.replace(/##/g, '#').replace(/\s*\|\s*/g, '|');
+
+      // Salviamo la stringa così com'è: "#RRGGBB" (flat) o "#...|#...|#..." (gradiente)
+      map[name] = raw;
+    });
+  return map;
+}
+
+async function loadMaps(){
+  if(!NAME_TO_HEX){ const r=await fetch('./Corrispondenze_Nome_Hex.csv'); if(!r.ok) throw new Error('CSV not found'); NAME_TO_HEX=parseCsv(await r.text()); }
+  if(!META){ const r=await fetch('./Doodles_all_metadata.json'); if(!r.ok) throw new Error('Metadata JSON not found'); META=await r.json(); }
+}
+
+/* ===== Compose: base + overlay → dataURL ===== */
+async function composeDataUrl(baseBlob, cfg, sleeveSpec, skinSpec){
+  const r = await fetch(`./overlays/${cfg.file}`);
+  if(!r.ok) throw new Error(`Overlay not found: ${cfg.file}`);
+  const svgText = await r.text();
+
+  // parse SVG robusto
+  let doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+  let svg = (doc.documentElement?.tagName?.toLowerCase() === 'svg')
+    ? doc.documentElement
+    : doc.querySelector('svg');
+  
+  if (!svg) {
+    // fallback: rimuovi prologo XML e riprova via innerHTML
+    const tmp = document.createElement('div');
+    tmp.innerHTML = svgText.replace(/^\s*<\?xml[^>]*\?>/, '').trim();
+    svg = tmp.querySelector('svg');
+  }
+  if (!svg) throw new Error('Overlay SVG missing <svg>');
+
+  svg.removeAttribute('width'); svg.removeAttribute('height');
+  svg.setAttribute('viewBox', svg.getAttribute('viewBox') || '0 0 1800 1800');
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+
+  const sleeveId = cfg.sleeveId || 'Sleeve_fill';
+  const skinId   = cfg.skinId   || 'Skin_fill';
+
+  // ==== helper gradient ====
+  const NS = 'http://www.w3.org/2000/svg';
+  const SHAPE_RE = /^(path|rect|circle|ellipse|polygon|polyline|use)$/i;
+  const DEFAULT_ANGLE = { skin: 0, sleeve: 0 }; // 0° = sx→dx
+
+  function ensureDefs(s){
+    let defs = s.querySelector('defs');
+    if(!defs){ defs = document.createElementNS(NS,'defs'); s.prepend(defs); }
+    return defs;
+  }
+  function splitStops(spec){
+    if(!spec) return [];
+    return String(spec).trim().replace(/##/g,'#').replace(/\s*\|\s*/g,'|').split('|').filter(Boolean);
+  }
+  function upsertLinearGradient(s, id, colors, angleDeg){
+    const defs = ensureDefs(s);
+    let g = s.querySelector('#'+id);
+    if(!g || g.tagName !== 'linearGradient'){
+      if(g) g.remove();
+      g = document.createElementNS(NS,'linearGradient');
+      g.setAttribute('id', id);
+      defs.appendChild(g);
+    }
+    g.setAttribute('x1','0%'); g.setAttribute('y1','0%');
+    g.setAttribute('x2','100%'); g.setAttribute('y2','0%');
+    if (Number.isFinite(angleDeg)) g.setAttribute('gradientTransform', `rotate(${angleDeg} .5 .5)`);
+
+    const n = colors.length;
+    const stops = colors.map((c,i)=>{
+      const st = document.createElementNS(NS,'stop');
+      const off = n === 1 ? 0 : (i/(n-1))*100;
+      st.setAttribute('offset', off + '%');
+      st.setAttribute('stop-color', c);
+      return st;
+    });
+    g.replaceChildren(...stops);
+    return `url(#${id})`;
+  }
+  function applySpecToTarget(s, targetId, spec, angleDeg){
+    if(!spec) return;
+  
+    // Safari vecchi: fallback di CSS.escape
+    const safeEscape = (str) => (window.CSS && CSS.escape) ? CSS.escape(str)
+      : String(str).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+  
+    const target = s.querySelector('#' + safeEscape(targetId));
+    if(!target) return;
+  
+    const setFillStyle = (el, val) => {
+      // lo stile inline con !important batte le classi .st0/.st1 di Illustrator
+      if (el.style && el.style.setProperty) el.style.setProperty('fill', val, 'important');
+      el.setAttribute('fill', val); // backup per renderer “pignoli”
+    };
+  
+    const colors = splitStops(spec);
+    if (colors.length <= 1){
+      const hex = colors[0] || spec; // tinta unica
+      setFillStyle(target, hex);
+      target.querySelectorAll('*').forEach(n=> setFillStyle(n, hex));
+      return;
+    }
+  
+    // gradiente (sx→dx + eventuale rotazione)
+    const fillUrl = upsertLinearGradient(s, `grad-${targetId}`, colors, angleDeg);
+    setFillStyle(target, fillUrl);
+    target.querySelectorAll('*').forEach(n=> setFillStyle(n, fillUrl));
+  }
+
+
+  // === Applica skin/sleeve ===
+  if(sleeveSpec) applySpecToTarget(svg, sleeveId, sleeveSpec, DEFAULT_ANGLE.sleeve);
+  if(skinSpec)   applySpecToTarget(svg, skinId,   skinSpec,   DEFAULT_ANGLE.skin);
+
+  // === Compose su canvas ===
+  const baseUrl = URL.createObjectURL(baseBlob);
+  const baseImg = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=baseUrl; });
+  const W = baseImg.naturalWidth, H = baseImg.naturalHeight;
+
+  const canvas = document.createElement('canvas'); canvas.width=W; canvas.height=H;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(baseImg,0,0,W,H);
+  URL.revokeObjectURL(baseUrl);
+
+  const svgSerialized = new XMLSerializer().serializeToString(svg);
+  const svgBlob = new Blob([svgSerialized], {type:'image/svg+xml'});
+  const svgUrl = URL.createObjectURL(svgBlob);
+  await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>{ ctx.drawImage(i,0,0,W,H); URL.revokeObjectURL(svgUrl); res(); }; i.onerror=rej; i.src=svgUrl; });
+
+  return canvas.toDataURL('image/png');
+}
+
+
+/* ===== OOPS: match tratti SOLO nei value di attributes ===== */
+function rowHasAnyNeedle(row, needles){
+  if(!row || !Array.isArray(needles) || needles.length===0) return false;
+
+  const keys = needles
+    .map(n => (n??'').toString().trim().toLowerCase())
+    .filter(Boolean);
+
+  const vals = Array.isArray(row.attributes)
+    ? row.attributes
+        .map(a => a && a.value)
+        .filter(v => typeof v === 'string')
+        .map(v => v.toLowerCase())
+    : [];
+
+  if(vals.length === 0){
+    vals.push(
+      ...Object.values(row)
+        .filter(v => typeof v === 'string')
+        .map(v => v.toLowerCase())
+    );
+  }
+
+  return keys.some(k => vals.some(v => v.includes(k)));
+}
+
+// ➜ sostituisci TUTTO il blocco updateFrameMaxHeight + debounce + listeners con questo
+
+function getViewportHeight() {
+  // Usa l’altezza della viewport “visibile” se disponibile (iOS Safari)
+  const vv = window.visualViewport?.height;
+  // Fallback stabile (evita oscillazioni di innerHeight su mobile)
+  return Math.floor(vv || document.documentElement.clientHeight || window.innerHeight);
+}
+
+// Evita ricalcoli aggressivi quando c’è la tastiera aperta
+function isSoftKeyboardOpen() {
+  const ae = document.activeElement;
+  const isTextField = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+  // Heuristica: viewport molto bassa + campo attivo ⇒ tastiera
+  return isTextField && getViewportHeight() < 520;
+}
+
+function updateFrameMaxHeight() {
+  // ➜ Telefoni: nessun ridimensionamento JS
+  if (IS_NARROW_TOUCH_PHONE) {
+    applyMobileNaturalMode();
+    return;
+  }
+  const frame    = document.querySelector('.frame');
+  const img      = document.getElementById('composite');
+  const shareRow = document.getElementById('shareRow');
+  const footer   = document.getElementById('madeBy');
+  if (!frame || !img) return;
+
+  // Se la tastiera è aperta, non “strizzare” tutto
+  if (isSoftKeyboardOpen()) return;
+
+  // Posizione del frame rispetto al viewport
+  const top = frame.getBoundingClientRect().top;
+
+  // Queste righe tengono spazio anche quando visibility:hidden (coerente col tuo layout)
+  const shareH = shareRow ? (shareRow.offsetHeight + 16) : 0;
+  const footH  = (footer && getComputedStyle(footer).display !== 'none') ? (footer.offsetHeight + 12) : 0;
+
+  const margin = 16;
+
+  // 🔑 Usa visualViewport / clientHeight per il mobile
+  const viewportH = getViewportHeight();
+  const availableH = Math.max(240, viewportH - top - shareH - footH - margin);
+
+  // Aggiorna la variabile CSS usata dall’immagine
+  document.documentElement.style.setProperty('--frame-max-h', availableH + 'px');
+
+  // Larghezza “target” basata sul rapporto dell’immagine (se noto)
+  const ratio = (img.naturalWidth && img.naturalHeight) ? (img.naturalWidth / img.naturalHeight) : 1;
+  const parentW = frame.parentElement ? frame.parentElement.clientWidth : document.documentElement.clientWidth;
+
+  // Non superare il contenitore, ma mantieni proporzioni
+  const targetW = Math.min(parentW, Math.floor(availableH * ratio));
+
+  frame.style.width    = targetW + 'px';
+  frame.style.maxWidth = targetW + 'px';
+}
+
+// Debounce
+let _ufmhTO;
+function updateFrameMaxHeightDebounced() {
+  clearTimeout(_ufmhTO);
+  _ufmhTO = setTimeout(updateFrameMaxHeight, 60);
+}
+
+// Listener che si adattano: sui telefoni passa in "naturale", su iPad/desktop ricalcola
+window.addEventListener('resize', debouncedReeval, { passive:true });
+window.addEventListener('orientationchange', debouncedReeval, { passive:true });
+window.visualViewport && window.visualViewport.addEventListener('resize', debouncedReeval, { passive:true });
+window.addEventListener('pageshow', debouncedReeval, { passive:true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) debouncedReeval(); }, { passive:true });
+
+// Quando l’immagine (thumb o PNG “cotto”) cambia → applica la modalità corretta
+document.getElementById('composite')?.addEventListener('load', () => {
+  if (IS_NARROW_TOUCH_PHONE) applyMobileNaturalMode();
+  else updateFrameMaxHeight();
+});
+
+
+  
+/* ===== Pipeline: on-chain → IPFS → compose ===== */
+async function openImage(){
+  setStatus('Cooking…');
+  showCenterPop('Cooking…');
+  setShareVisible(false);
+
+  const raw = ((idCtrl && idCtrl.value != null) ? idCtrl.value : (tokenEl?.value || '')).trim();
+  const id = parseInt(raw,10);
+
+  if(!Number.isFinite(id) || id<0){ setStatus('Enter a valid ID (≥0).'); return; }
+
+  try{
+    await loadMaps();
+    const data = '0xc87b56dd' + (BigInt(id).toString(16).padStart(64,'0'));
+    const res  = await rpcCall('eth_call', [{to:DEFAULT_CONTRACT, data}, 'latest']);
+    if(!res) throw new Error('RPC endpoint not responding');
+    const tokenUri = decodeAbiString(res);
+    if(!tokenUri) throw new Error('Could not read tokenURI');
+    const meta = await fetchJsonAny(ipfsUrls(tokenUri));
+    if(!meta) throw new Error('Metadata not available');
+
+    let baseBlob = null;
+    const imageUri = meta.image || meta.image_url || meta.imageIpfs;
+    if(imageUri) baseBlob = await fetchBlobAny(ipfsUrls(imageUri));
+    if(!baseBlob){
+      for(const p of [`./doodles/${id}.png`, `./${id}.png`]){ try{ const rr=await fetch(p); if(rr.ok){ baseBlob=await rr.blob(); break; } }catch{} }
+      if(!baseBlob) throw new Error('No Doodle image found');
+    }
+
+    const row = META[id] || {};
+    const nameSkin   = (row.Skin_colors   || row.skin_colors   || row.Skin   || '').trim();
+    const nameSleeve = (row.Sleeve_colors || row.sleeve_colors || row.Sleeve || '').trim();
+    const hexSkin   = NAME_TO_HEX[nameSkin];
+    const hexSleeve = NAME_TO_HEX[nameSleeve];
+
+    const dataUrl = await composeDataUrl(baseBlob, currentCfg, hexSleeve, hexSkin);
+    imgEl.src = dataUrl;
+    hideCenterPop();
+
+    setShareVisible(true);
+    imgEl.classList.remove('is-example');
+    if(exBadge) exBadge.style.display = 'none';
+    updateFrameMaxHeight(); // <-- garantisce che immagine + Copy PNG stiano a vista
+    imgEl.alt = `Doodle ${id} + ${currentCfg.name||currentCfg.id}`;
+    setStatus(`Dood ${id}: cooked and ready!`);
+
+    const traits = Array.isArray(currentCfg.oopsTraits) ? currentCfg.oopsTraits : [];
+    const message = (currentCfg.oopsMessage || '').trim();
+    const showOops = (traits.length > 0) && message && rowHasAnyNeedle(row, traits);
+    const oopsEl = document.getElementById('oopsBadge');
+    if (oopsEl){
+      if (showOops){
+        oopsEl.textContent = message;
+        oopsEl.style.display = 'inline-block';
+      }else{
+        oopsEl.style.display = 'none';
+      }
+    }
+
+  }catch(e){
+    if(location.protocol==='file:') setStatus('Please run a local server (e.g. python -m http.server 5500).');
+    else setStatus('❌ ' + (e?.message || 'Something went wrong'));
+    showCenterPop('Error', (e?.message || 'Something went wrong'), 2000);
+    const oopsEl = document.getElementById('oopsBadge');
+    if (oopsEl) oopsEl.style.display = 'none';
+    setShareVisible(false);
+  }
+}
+
+function applyBadge(badgeEl, cfg){
+  if(!badgeEl) return;
+  if(!cfg || !cfg.badge){
+    badgeEl.style.display = 'none';
+    return;
+  }
+  badgeEl.textContent = cfg.badge;
+  badgeEl.style.display = 'inline-block';
+
+  if(cfg.badgeColor) badgeEl.style.background = cfg.badgeColor;
+
+  if(cfg.badgeText){
+    badgeEl.style.color = cfg.badgeText;
+    return;
+  }
+
+  try{
+    const bg = getComputedStyle(badgeEl).backgroundColor;
+    const m = bg && bg.match(/\d+(\.\d+)?/g);
+    if(m){
+      const [r,g,b] = m.map(Number);
+      const yiq = (r*299 + g*587 + b*114) / 1000;
+      badgeEl.style.color = yiq >= 150 ? '#000' : '#fff';
+    }else{
+      badgeEl.style.color = '#000';
+    }
+  }catch{
+    badgeEl.style.color = '#000';
+  }
+}
+
+// ===== Fix tastiera iPad in PWA =====
+(function fixIOSPWAKeyboard(){
+  const inPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isiPad = /iPad|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document;
+  if(!(inPWA && isiPad)) return;
+
+  if(!tokenEl) return;
+  tokenEl.setAttribute('readonly', 'readonly');
+
+  tokenEl.addEventListener('touchend', function onTouch(){
+    tokenEl.removeAttribute('readonly');
+    setTimeout(()=>{
+      tokenEl.focus();
+      const v = tokenEl.value; tokenEl.value=''; tokenEl.value=v;
+    }, 0);
+    tokenEl.removeEventListener('touchend', onTouch);
+  }, {passive:true});
+
+  tokenEl.addEventListener('pointerdown', function onPD(){
+    if (tokenEl.hasAttribute('readonly')) {
+      tokenEl.removeAttribute('readonly');
+      setTimeout(()=>tokenEl.focus(), 0);
+    }
+  }, {passive:true});
+})();
+
+/* ===== Init ===== */
+(async function init(){
+  if (window.OC_UNSUPPORTED) {
+    setStatus('Browser non supporta alcune feature: aggiorna Safari/OS.');
+  }
+
+  try{
+    await loadManifest();
+
+    const p = new URLSearchParams(location.search);
+    const ovId = p.get('overlay')
+      || localStorage.getItem('lastOverlay')
+      || OVERLAYS.default
+      || (OVERLAYS.items[0] && OVERLAYS.items[0].id);
+
+    currentCfg = getCfg(ovId) || OVERLAYS.items[0];
+    if (currentCfg?.id) localStorage.setItem('lastOverlay', currentCfg.id);
+
+    // Header
+    ovName.textContent = currentCfg.name || currentCfg.id;
+    ovAuthor.textContent = currentCfg.author ? `by ${currentCfg.author}` : '';
+
+    // Link al Trait Viewer con overlay corrente
+    const viewerLink = document.getElementById('viewerLink');
+    if (viewerLink) {
+      const u = new URL('./Doodles_trait-viewer.html', location.href);
+      u.searchParams.set('overlay', currentCfg.id);
+      viewerLink.href = u.toString();
+    }
+
+    // Badge overlay
+    applyBadge(ovBadge, currentCfg);
+
+    // Footer "made by"
+    (function(){
+      const name = (currentCfg.author || '').toString().trim();
+      const handleRaw = (currentCfg.authorHandle || currentCfg.x || currentCfg.twitter || '').toString().trim();
+      const handle = handleRaw.replace(/^@/, '');
+      const url = (currentCfg.authorUrl && currentCfg.authorUrl.trim())
+               || (handle ? `https://x.com/${handle}` : '');
+
+      const hasName = !!name;
+      const hasHandle = !!handle;
+
+      if(!hasName && !hasHandle){
+        madeBy.style.display = 'none';
+        return;
+      }
+
+      madeBy.style.display = 'flex';
+      mbName.textContent = hasName ? name : (hasHandle ? '@'+handle : '');
+      mbSep.style.display = (hasName && hasHandle) ? '' : 'none';
+
+      if(hasHandle){
+        mbHandle.textContent = '@' + handle;
+        mbHandle.style.display = '';
+      }else{
+        mbHandle.style.display = 'none';
+      }
+
+      if(url){
+        madeByLink.href = url;
+        madeByLink.style.pointerEvents = '';
+      }else{
+        madeByLink.removeAttribute('href');
+        madeByLink.style.pointerEvents = 'none';
+      }
+    })();
+
+    // Share row
+    MOBILE_SHARE = (isMobileLike() || isAppleStandalone()) && !!navigator.share;
+    const shareRow = document.getElementById('shareRow');
+    const shareBtn = document.getElementById('shareX');
+    if (shareRow) { shareRow.style.display = 'flex'; setShareVisible(false); }
+    if (shareBtn)  shareBtn.style.display = MOBILE_SHARE ? '' : 'none';
+
+    // Immagine esempio
+    const thumb = currentCfg.thumb || `thumbs/${currentCfg.id}.png`;
+    imgEl.src = thumb;
+    imgEl.classList.add('is-example');
+    if(exBadge) exBadge.style.display = 'inline-block';
+    imgEl.alt = currentCfg.name || currentCfg.id;
+    const oopsEl = document.getElementById('oopsBadge');
+    if (oopsEl) oopsEl.style.display = 'none';
+
+    // decide la modalità iniziale (telefono naturale vs iPad/desktop gestito)
+    reevaluateMode();
+
+    
+    // auto-cook se la pagina è arrivata con ?id= (l’input è già stato valorizzato da initIdControl)
+    if (HAD_ID_AT_LOAD && idCtrl && idCtrl.value != null) {
+      await openImage();
+    }
+
+
+  }catch(e){
+    setStatus(e?.message || 'Init error');
+  }
+})();
+
+
+function dataUrlToBlob(dataURL){
+  const [head, body] = dataURL.split(',');
+  const mime = (/data:(.*?);/.exec(head) || [,'application/octet-stream'])[1];
+  const bstr = head.includes(';base64') ? atob(body) : decodeURIComponent(body);
+  const buf = new Uint8Array(bstr.length);
+  for (let i=0;i<bstr.length;i++) buf[i] = bstr.charCodeAt(i);
+  return new Blob([buf], {type:mime});
+}
+
+async function shareMobileX(){
+  if (!MOBILE_SHARE) return;
+
+  const id = parseInt((tokenEl?.value || '').trim(), 10);
+  if (!Number.isFinite(id)) return;
+
+  const layoutName = (currentCfg?.name || currentCfg?.id || 'Overlay') + '';
+  const caption = `Cooked "${layoutName}" on Doods #${id} !
+
+Get yours at https://arb8i.xyz !`;
+
+  try{
+    const img = document.getElementById('composite');
+    const src = img?.src;
+    if (!src || !navigator.share) return;
+
+    const blob = src.startsWith('data:') ? dataUrlToBlob(src) : await (await fetch(src)).blob();
+    const file = new File([blob], 'doodle.png', { type: 'image/png' });
+
+    try { await navigator.clipboard.writeText(caption); } catch {}
+    await navigator.share({ text: caption, files: [file] });
+    
+  }catch(e){
+    console.error('Share failed:', e);
+  }
+}
+
+async function copyImage(){
+  try{
+    if (imgEl.classList.contains('is-example')) {
+      setStatus('Generate an image first.');
+      return;
+    }
+
+    const src = imgEl?.src;
+    if (!src) return;
+
+    let blob = src.startsWith('data:')
+      ? dataUrlToBlob(src)
+      : await (await fetch(src)).blob();
+
+    if (blob.type !== 'image/png') {
+      const tmp = new Image();
+      await new Promise((res, rej)=>{ tmp.onload=()=>res(); tmp.onerror=rej; tmp.src=src; });
+      const c = document.createElement('canvas');
+      c.width = tmp.naturalWidth; c.height = tmp.naturalHeight;
+      c.getContext('2d').drawImage(tmp, 0, 0);
+      blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    }
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      await navigator.clipboard.write([ new ClipboardItem({ 'image/png': blob }) ]);
+      showCenterPop('Copied!', 'Image copied to clipboard ✅', 1600);
+    } else {
+      const a = document.createElement('a');
+      a.href = src;
+      a.download = 'doodle.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setStatus('Clipboard not supported here. Download started.');
+      showCenterPop('Downloaded', 'PNG saved to your device', 1600);
+
+    }
+  } catch (e){
+    console.error(e);
+    setStatus('Copy failed. Long-press / save might work.');
+    
+  }
+}
+
+/* ===== Popup centrale helpers ===== */
+function showCenterPop(title, desc = '', autoHideMs = 0){
+  const el = document.getElementById('centerPop');
+  const t  = document.getElementById('cpTitle');
+  const d  = document.getElementById('cpDesc');
+  if(!el || !t || !d) return;
+
+  t.textContent = title || '';
+  d.textContent = desc  || '';
+  d.style.display = desc ? '' : 'none';
+
+  el.style.display = 'flex';
+
+  if (autoHideMs > 0){
+    clearTimeout(showCenterPop._t);
+    showCenterPop._t = setTimeout(hideCenterPop, autoHideMs);
+  }
+}
+function hideCenterPop(){
+  const el = document.getElementById('centerPop');
+  if (el) el.style.display = 'none';
+}
+
+  
+/* ===== Events ===== */
+document.getElementById('copyImg')?.addEventListener('click', copyImage);
+document.getElementById('shareX')?.addEventListener('click', shareMobileX);
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

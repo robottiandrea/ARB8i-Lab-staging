@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "recipes": [
+    {
+      "id": "KoreanHeart_Default",
+      "animation": {
+        "file": "overlays/animated/korean-heart/KoreanHeart.json"
+      },
+      "steps": {
+        "knockout": {
+          "enabled": false,
+          "params": { "ink": 64, "gap": -1, "edge": 18, "feather": 1.2 }
+        },
+        "recolor": {
+          "enabled": true,
+          "colorBindings": {
+            "Skin_fill":   "meta:Skin_colors",
+            "Sleeve_fill": "meta:Sleeve_colors",
+            "Shadow_fill": "keep" 
+          },
+          "blend": {
+            "Shadow_fill": { "mode": "soft-light", "opacity": 0.8 }
+          },
+          "orientation": "horizontal"
+        }
+      },
+      "composeOrder": ["doodle", "svg"],
+      "defaults": {
+        "outSize": 900,
+        "bitrate": 8000000
+      }
+    }
+  ]
+}

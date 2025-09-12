@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ARB8i Lab — Animated Editor</title>
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles/common.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f1115">
+
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Doodles">
+
+<!-- Lottie -->
+<script src="https://unpkg.com/lottie-web/build/player/lottie.min.js"></script>
+<!-- FFmpeg WASM (fallback WebM->MP4) -->
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
+
+<!-- libreria condivisa per la riga ID -->
+<script src="./scripts/common.js"></script>
+
+<script>
+  const SITE_URL = 'https://arb8i.xyz';
+  try { new Function('return 0?.x'); } catch { window.OC_UNSUPPORTED = true; }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  }
+</script>
+
+<style>
+  .wrap{ max-width:820px; margin:0 auto; padding:28px; }
+
+  .header{ display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  .nav-back{ display:inline-flex; align-items:center; gap:8px; text-decoration:none; color:var(--acc); opacity:.85; }
+  .nav-back:hover{ opacity:1; }
+  h1{ margin:0; font-size:20px; font-weight:600; }
+  .badge{ display:inline-block; margin-left:8px; padding:3px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+
+  .card{ padding:22px; }
+  .status{ min-height:22px; color:var(--muted); font-size:13px; margin-top:10px; }
+
+  :root{ --frame-max-h: 70vh; --frame-w: 640px; }
+  .frame{
+    position:relative; width:auto; max-width:100%;
+    margin:18px auto 8px; border:1px dashed var(--border);
+    border-radius:12px; background:#0d1016; transition: width .12s ease;
+    overflow:hidden;
+  }
+
+  /* area preview: canvas per l’anteprima + video (post encoding) */
+  #previewCanvas, #resultVideo, #exampleVideo{
+    display:block;
+    width:100%;
+    max-width: 900px;
+    aspect-ratio: 1 / 1;
+    height:auto;
+    max-height: var(--frame-max-h);
+    border-radius:12px;
+    background:#000;
+    object-fit: contain;
+  }
+  #resultVideo{ display:none; }
+  #exampleVideo{ display:none; } /* lo mostriamo da JS se c'è il file */
+
+  .example-badge{
+    position:absolute; top:8px; left:8px;
+    padding:4px 8px; border-radius:10px; font-size:11px; font-weight:700;
+    color:#fff; background:rgba(0,0,0,.55); backdrop-filter: blur(2px);
+    z-index:2; pointer-events:none;
+  }
+  .oops-badge{
+    position:absolute; top:8px; right:8px;
+    padding:4px 10px; border-radius:999px; font-size:12px; font-weight:800;
+    color:#fff; background:#ff4d4f; box-shadow:0 6px 18px rgba(0,0,0,.28);
+    z-index:3; pointer-events:none; letter-spacing:.2px;
+  }
+
+  .share-row{ display:flex; gap:10px; justify-content:center; margin:12px 0 0; }
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="header">
+      <a class="nav-back" href="index.html?tab=animated">← Gallery</a>
+      <div>
+        <h1 id="ovName">Animated Composition</h1>
+        <div class="sub"><span id="ovAuthor"></span><span id="ovBadge" class="badge" style="display:none"></span></div>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="hero-id">
+        <label for="tokenId" class="form-label">Doodles ID</label>
+        <div class="hero-id-row">
+          <div id="idRowHost"></div>
+          <div class="id-cta"></div>
+        </div>
+        <p class="sub" style="margin:6px 0 0">
+          Missing your Doodle ID?
+          <a id="viewerLink" class="back shimmer idhelp" href="./Doodles_trait-viewer.html?source=editor_animator&retComp=<COMP_ID>">Find it here!</a>
+        </p>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <div class="frame">
+        <div id="exampleBadge" class="example-badge" aria-hidden="true">EXAMPLE</div>
+        <div id="oopsBadge" class="oops-badge" style="display:none" aria-hidden="true"></div>
+        <canvas id="previewCanvas"></canvas>
+        <video id="exampleVideo" muted playsinline loop preload="metadata"></video>
+        <video id="resultVideo" playsinline controls loop></video>
+      </div>
+
+      <div id="shareRow" class="share-row" style="display:none">
+        <button id="shareX" class="id-btn" type="button" disabled>Share!</button>
+        <button id="copyImg" class="id-btn" type="button">Download .MP4</button>
+      </div>
+    </section>
+
+    <div id="madeBy" class="footer-madeby" style="display:none">
+      <a id="madeByLink" class="shimmer madeby-link" href="#" target="_blank" rel="noopener">
+        made by&nbsp;<span id="mbName">author</span><span id="mbSep">–</span><span id="mbHandle">@handle</span>
+      </a>
+    </div>
+  </main>
+
+  <div id="lottieOff" style="position:absolute; left:-99999px; top:-99999px; width:1px; height:1px; overflow:hidden;"></div>
+
+  <div id="centerPop" class="center-pop" role="dialog" aria-modal="true" aria-live="assertive">
+    <div class="box">
+      <div id="cpTitle" class="title"></div>
+      <p id="cpDesc" class="desc"></p>
+    </div>
+  </div>
+
+  <script type="module">
+  // ↓↓↓ AGGIUNGI vicino alle altre variabili globali
+  let lastCookedId = null;
+  let lastLayoutName = null;
+
+  import { knockoutProcess } from './scripts/knockout.js';
+  import { tagAllLayersWithNames, setLayerFlatByName, setLayerGradientStopsByName, setSoftLightByName } from './scripts/recolor.js';
+
+  /* ======= FIX: definisci $ PRIMA di usarlo ======= */
+  const $ = s => document.querySelector(s);
+
+  /* ======= Riferimenti DOM ======= */
+  const statusEl = $('#status');
+  const ovName = $('#ovName'); const ovAuthor = $('#ovAuthor'); const ovBadge = $('#ovBadge');
+  const exBadge = $('#exampleBadge'); const oopsEl = $('#oopsBadge');
+  const madeBy = $('#madeBy'); const madeByLink = $('#madeByLink'); const mbName = $('#mbName'); const mbHandle = $('#mbHandle'); const mbSep = $('#mbSep');
+  const previewCanvas = $('#previewCanvas'); const resultVideo = $('#resultVideo'); const exampleVideo = $('#exampleVideo'); // FIX: ora dopo $
+
+  const shareRow = $('#shareRow'); const shareBtn = $('#shareX'); const copyBtn = $('#copyImg');
+  const off = document.getElementById('lottieOff');
+
+  /* ======= Config ======= */
+  const OUT_SIZE = 900;
+  const MASTER_SIZE = 1800;
+  const MICRO_BLUR = 0.25;
+  const VIDEO_BITRATE = 8_000_000;
+
+  /* ======= Helpers ======= */
+  function setStatus(t){ statusEl.textContent = t || ''; }
+  function showCenterPop(title, desc = '', autoHideMs = 0){
+    const el = document.getElementById('centerPop'); const t  = document.getElementById('cpTitle'); const d  = document.getElementById('cpDesc');
+    if(!el||!t||!d) return; t.textContent=title||''; d.textContent=desc||''; d.style.display=desc?'':'none'; el.style.display='flex';
+    if(autoHideMs>0){ clearTimeout(showCenterPop._t); showCenterPop._t=setTimeout(()=>{el.style.display='none'}, autoHideMs); }
+  }
+  function hideCenterPop(){ const el=document.getElementById('centerPop'); if(el) el.style.display='none'; }
+  const sleep = ms => new Promise(r=>setTimeout(r,ms));
+  const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  function pickBestMime(){
+    const prefer = isIOS()
+      ? ['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']
+      : ['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+    for(const m of prefer){ if(MediaRecorder.isTypeSupported?.(m)) return m; }
+    return '';
+  }
+  const hasWebCodecs = 'VideoEncoder' in window && 'VideoFrame' in window;
+  function isMobileLike(){
+    const ua = navigator.userAgent; const iPhone=/iPhone|iPod/i.test(ua); const Android=/Android/i.test(ua);
+    const iPad=/iPad/i.test(ua) || (/Macintosh/i.test(ua) && 'ontouchend' in document);
+    return iPhone || Android || iPad;
+  }
+  function setShareVisible(visible){
+    if(!shareRow || !shareBtn) return;
+    shareRow.style.display = 'flex';
+    shareRow.style.visibility = visible ? 'visible' : 'hidden';
+    shareRow.style.pointerEvents = visible ? 'auto' : 'none';
+    shareBtn.style.display = isMobileLike() ? '' : 'none';
+    shareBtn.disabled = !visible;
+  }
+
+  /* === sizing (canvas/video) + frame === */
+  function sizeViewer(){
+    const frame = document.querySelector('.frame');
+    const box   = getPreviewBox(); // canvas o video
+    const frameW = frame ? frame.clientWidth : OUT_SIZE;
+
+    const mhStr = getComputedStyle(box).maxHeight;
+    const mh = mhStr && mhStr.endsWith('px') ? parseFloat(mhStr) : Number.POSITIVE_INFINITY;
+
+    // box 1:1 (il canvas è 1:1; il video può essere diverso ma lo conteniamo)
+    const cssSize = Math.floor(Math.min(frameW, mh, OUT_SIZE));
+    const dpr = window.devicePixelRatio || 1;
+
+    if (box === previewCanvas){
+      previewCanvas.style.width  = cssSize + 'px';
+      previewCanvas.style.height = cssSize + 'px';
+      previewCanvas.width  = Math.max(1, Math.round(cssSize * dpr));
+      previewCanvas.height = Math.max(1, Math.round(cssSize * dpr));
+    }
+
+    if (frame){
+      frame.style.width    = cssSize + 'px';
+      frame.style.maxWidth = cssSize + 'px';
+    }
+  }
+
+  window.addEventListener('resize', sizeViewer, { passive:true });
+
+  /* ===== rilevamento device / layout come editor classico ===== */
+  function isIPadLike(){
+    const ua = navigator.userAgent || '';
+    const isiPadUA = /iPad/i.test(ua);
+    const macTouch = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+    return isiPadUA || macTouch;
+  }
+  function isNarrowScreen(){
+    const sw = Math.min(window.screen.width, window.screen.height);
+    return sw <= 820;
+  }
+  function isNarrowTouchPhone(){
+    const coarse = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+    return coarse && isNarrowScreen() && !isIPadLike();
+  }
+  let IS_NARROW_TOUCH_PHONE = isNarrowTouchPhone();
+
+  function applyMobileNaturalMode(){
+    document.documentElement.style.setProperty('--frame-max-h', 'none');
+    const frame = document.querySelector('.frame');
+    if (frame){
+      frame.style.transition = 'none';
+      frame.style.width = '';
+      frame.style.maxWidth = '';
+    }
+  }
+  function applyDesktopManagedMode(){
+    const frame = document.querySelector('.frame');
+    if (frame) frame.style.transition = 'width .12s ease';
+    updateFrameMaxHeight();
+  }
+  function getViewportHeight(){
+    const vv = window.visualViewport?.height;
+    return Math.floor(vv || document.documentElement.clientHeight || window.innerHeight);
+  }
+  function isSoftKeyboardOpen(){
+    const ae = document.activeElement;
+    const isTextField = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+    return isTextField && getViewportHeight() < 520;
+  }
+  function getPreviewBox(){
+    if (resultVideo.style.display === 'block') return resultVideo;
+    if (exampleVideo && exampleVideo.style.display !== 'none') return exampleVideo;
+    return previewCanvas;
+  }
+  function updateFrameMaxHeight(){
+    if (IS_NARROW_TOUCH_PHONE){ applyMobileNaturalMode(); return; }
+
+    const frame    = document.querySelector('.frame');
+    const box      = getPreviewBox();
+    const share    = document.getElementById('shareRow');
+    const footer   = document.getElementById('madeBy');
+    if (!frame || !box) return;
+    if (isSoftKeyboardOpen()) return;
+
+    const top   = frame.getBoundingClientRect().top;
+    const shareH = share ? (share.offsetHeight + 16) : 0;
+    const footH  = (footer && getComputedStyle(footer).display !== 'none') ? (footer.offsetHeight + 12) : 0;
+    const margin = 16;
+
+    const viewportH  = getViewportHeight();
+    const availableH = Math.max(240, viewportH - top - shareH - footH - margin);
+
+    let ratio = 1;
+    if (box === resultVideo && resultVideo.videoWidth && resultVideo.videoHeight){
+      ratio = resultVideo.videoWidth / resultVideo.videoHeight;
+    }
+
+    const parentW = frame.parentElement ? frame.parentElement.clientWidth : document.documentElement.clientWidth;
+    const targetW = Math.min(parentW, Math.floor(availableH * ratio));
+
+    document.documentElement.style.setProperty('--frame-max-h', availableH + 'px');
+    frame.style.width    = targetW + 'px';
+    frame.style.maxWidth = targetW + 'px';
+
+    sizeViewer();
+  }
+
+  function reevaluateMode(){
+    const prev = IS_NARROW_TOUCH_PHONE;
+    IS_NARROW_TOUCH_PHONE = isNarrowTouchPhone();
+    if (IS_NARROW_TOUCH_PHONE !== prev){
+      if (IS_NARROW_TOUCH_PHONE) applyMobileNaturalMode();
+      else applyDesktopManagedMode();
+    }else{
+      if (!IS_NARROW_TOUCH_PHONE) updateFrameMaxHeight();
+    }
+  }
+  const debouncedReeval = (()=>{ let to; return ()=>{ clearTimeout(to); to = setTimeout(reevaluateMode, 80); }; })();
+
+  window.addEventListener('resize', debouncedReeval, { passive:true });
+  window.addEventListener('orientationchange', debouncedReeval, { passive:true });
+  window.visualViewport && window.visualViewport.addEventListener('resize', debouncedReeval, { passive:true });
+  window.addEventListener('pageshow', debouncedReeval, { passive:true });
+
+  /* FIX: i listener ora usano variabili definite */
+  resultVideo?.addEventListener('loadedmetadata', debouncedReeval);
+  exampleVideo?.addEventListener('loadedmetadata', debouncedReeval);
+
+  /* ======= ID row ======= */
+  const OCNS = window.OC;
+  if (OCNS?.mountIdRow) {
+    OCNS.mountIdRow('#idRowHost', {
+      inputId: 'tokenId', previewId: 'idPreview', buttonId: 'go',
+      buttonText: 'Cook it!', buttonClass: 'id-btn', buttonContainer: '.id-cta',
+      showPreview: true, placeholder: '8929', maxLen: 4
+    });
+  }
+  let idCtrl = null;
+  if (OCNS?.initIdControl) {
+    idCtrl = OCNS.initIdControl({
+      input:'#tokenId', preview:'#idPreview', button:'#go',
+      defaultId:'8929', max:9999, persistKey:'lastId', urlParam:'id',
+      onApply(){ cookComposition(); },
+      onClear(){ setStatus(''); setShareVisible(false); }
+    });
+  }
+
+  /* ======= Dati / manifest ======= */
+  let ANIMATED=null, RECIPES=null, currentItem=null, currentRecipe=null;
+  let NAME_TO_HEX=null, META=null;
+
+  async function loadAnimatedManifest(){
+    for(const url of ['./overlays/animated.json','./animated.json']){
+      try{ const r=await fetch(url,{cache:'no-cache'}); if(r.ok){ ANIMATED=await r.json(); return; } }catch{}
+    }
+    ANIMATED={items:[]};
+  }
+  async function loadRecipes(){
+    for(const url of ['./overlays/recipes.json','./recipes.json']){
+      try{ const r=await fetch(url,{cache:'no-cache'}); if(r.ok){ RECIPES=await r.json(); return; } }catch{}
+    }
+    RECIPES={version:1,recipes:[]};
+  }
+  function getCompCfg(id){ return ANIMATED?.items?.find(x=>x.id===id) || null; }
+  function getRecipe(id){ return RECIPES?.recipes?.find(x=>x.id===id) || null; }
+
+  function parseCsv(text){
+    const map={};
+    text.replace(/\ufeff/g,'').replace(/\r\n?/g,'\n').split('\n').forEach(line=>{
+      const s=line.trim(); if(!s) return;
+      const p=s.split(/[,;:]\s*/); if(p.length<2) return;
+      const name=(p[0]||'').replace(/^"+|"+$/g,'').trim();
+      let raw=(p.slice(1).join(':')||'').replace(/^"+|"+$/g,'').trim();
+      if(!name||!raw) return; if(/^name$/i.test(name)&&/^hex$/i.test(raw)) return;
+      raw = raw.replace(/##/g,'#').replace(/\s*\|\s*/g,'|');
+      map[name]=raw;
+    });
+    return map;
+  }
+  async function loadMaps(){
+    if(!NAME_TO_HEX){ const r=await fetch('./Corrispondenze_Nome_Hex.csv'); if(!r.ok) throw new Error('CSV not found'); NAME_TO_HEX=parseCsv(await r.text()); }
+    if(!META){ const r=await fetch('./Doodles_all_metadata.json'); if(!r.ok) throw new Error('Metadata JSON not found'); META=await r.json(); }
+  }
+
+  /* ======= RPC / IPFS ======= */
+  const DEFAULT_CONTRACT = new URLSearchParams(location.search).get('contract')
+    || '0x8a90CAb2b38dba80c64b7734e58Ee1dB38B8992e';
+  const RPCS = ['https://cloudflare-eth.com','https://eth.drpc.org','https://eth.llamarpc.com','https://rpc.ankr.com/eth','https://eth.public-rpc.com'];
+  const IPFS_GW = ['https://ipfs.io/ipfs/','https://cloudflare-ipfs.com/ipfs/','https://dweb.link/ipfs/','https://gateway.pinata.cloud/ipfs/'];
+  function ipfsUrls(uri){ if(typeof uri!=='string') return []; if(uri.startsWith('ipfs://')){ const p=uri.slice(7); return IPFS_GW.map(g=>g+p); } return [uri]; }
+  async function fetchJsonAny(urls){ for(const u of urls){ try{ const r=await fetch(u,{headers:{'Accept':'application/json'}}); if(r.ok) return await r.json(); }catch{} } return null; }
+  async function fetchBlobAny(urls){ for(const u of urls){ try{ const r=await fetch(u); if(r.ok) return await r.blob(); }catch{} } return null; }
+  async function rpcCall(method, params){
+    const payload={jsonrpc:'2.0',id:1,method,params}, headers={'Content-Type':'application/json','Accept':'application/json'};
+    for(const url of RPCS){ try{ const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(payload)}); if(!r.ok) continue; const d=await r.json(); if(d && !d.error) return d.result; }catch{} }
+    return null;
+  }
+  function pad32hex(n){ const h=BigInt(n).toString(16); return h.padStart(64,'0'); }
+  function decodeAbiString(hexdata){
+    if(!hexdata||!hexdata.startsWith('0x')) return null;
+    const h=hexdata.slice(2); if(h.length<128) return null;
+    const length=parseInt(h.slice(64,128),16); const s=h.slice(128,128+length*2);
+    try{ const bytes=s.match(/.{1,2}/g).map(b=>parseInt(b,16)); return new TextDecoder().decode(new Uint8Array(bytes)); }catch{ return null; }
+  }
+
+  /* ======= Stato animazione/preview ======= */
+  let anim=null, svgEl=null, lottieData=null;
+  let doodleCanvas=null, doodleDraw={x:0,y:0,w:MASTER_SIZE,h:MASTER_SIZE};
+  let rafId = null;
+
+  function stopPreview(){
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+
+  async function previewTick(){
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = previewCanvas.getContext('2d');
+    const css = previewCanvas.clientWidth;
+
+    const svgBmp = await rasterizeCurrentSVG();
+
+    const master = document.createElement('canvas');
+    master.width = MASTER_SIZE; master.height = MASTER_SIZE;
+    const mctx = master.getContext('2d');
+
+    mctx.fillStyle = '#fff';
+    mctx.fillRect(0,0,MASTER_SIZE,MASTER_SIZE);
+
+    if (doodleCanvas){
+      mctx.drawImage(
+        doodleCanvas,
+        0,0,doodleCanvas.width,doodleCanvas.height,
+        doodleDraw.x, doodleDraw.y, doodleDraw.w, doodleDraw.h
+      );
+    }
+    if (svgBmp){ mctx.drawImage(svgBmp, 0,0,MASTER_SIZE,MASTER_SIZE); }
+
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,css,css);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.filter = `blur(${MICRO_BLUR}px)`;
+    ctx.drawImage(master, 0,0,MASTER_SIZE,MASTER_SIZE, 0,0,css,css);
+    ctx.filter = 'none';
+
+    rafId = requestAnimationFrame(previewTick);
+  }
+
+  function startPreview(){
+    stopPreview();
+    sizeViewer();
+    rafId = requestAnimationFrame(previewTick);
+  }
+
+  async function loadLottieFrom(json){
+    if (anim){ try{ anim.destroy(); }catch{} }
+    anim = null; svgEl = null;
+
+    lottieData = json;
+    anim = lottie.loadAnimation({
+      container: off,
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      animationData: lottieData
+    });
+
+    return new Promise((resolve)=>{
+      anim.addEventListener('DOMLoaded', ()=>{
+        svgEl = anim.renderer.svgElement;
+        svgEl.setAttribute('viewBox', `0 0 ${MASTER_SIZE} ${MASTER_SIZE}`);
+        svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+        try { tagAllLayersWithNames(anim); } catch {}
+
+        anim.setSpeed(1);
+        anim.play();
+
+        resolve();
+      });
+    });
+  }
+
+  function applyRecolor(recipe, metaRow){
+    if(!svgEl || !recipe?.steps?.recolor?.enabled) return;
+    const bindings = recipe.steps.recolor.colorBindings || {};
+    const orientation = recipe.steps.recolor.orientation || 'horizontal';
+    const soft = recipe.steps.recolor.blend || {};
+    const resolveMeta = (key) => {
+      if(!metaRow) return '';
+      const field = key.replace(/^meta:/,'');
+      const v = metaRow[field] || metaRow[field.toLowerCase()] || '';
+      return String(v).trim();
+    };
+    const nameToStops = (name) => {
+      const spec = NAME_TO_HEX?.[name] || '';
+      if(!spec) return [];
+      return spec.includes('|') ? spec.split('|').map(s=>s.trim()) : [spec.trim()];
+    };
+
+    for(const [layer, spec] of Object.entries(bindings)){
+      if(spec === 'keep') continue;
+      if(String(spec).startsWith('meta:')){
+        const name = resolveMeta(spec);
+        const stops = nameToStops(name);
+        if(stops.length>1) setLayerGradientStopsByName(svgEl, layer, stops, orientation);
+        else if(stops.length===1) setLayerFlatByName(svgEl, layer, stops[0]);
+      }else{
+        const stops = spec.includes('|') ? spec.split('|').map(s=>s.trim()) : [spec.trim()];
+        if(stops.length>1) setLayerGradientStopsByName(svgEl, layer, stops, orientation);
+        else if(stops.length===1) setLayerFlatByName(svgEl, layer, stops[0]);
+      }
+    }
+    for(const [layer, cfg] of Object.entries(soft)){
+      const op = Number(cfg?.opacity ?? 0.8);
+      setSoftLightByName(svgEl, layer, isFinite(op)?op:0.8);
+    }
+  }
+
+  async function rasterizeCurrentSVG(){
+    if(!svgEl) return null;
+    const clone=svgEl.cloneNode(true);
+    clone.setAttribute('width',MASTER_SIZE); clone.setAttribute('height',MASTER_SIZE);
+    clone.setAttribute('viewBox',`0 0 ${MASTER_SIZE} ${MASTER_SIZE}`);
+    clone.setAttribute('preserveAspectRatio','xMidYMid meet');
+    const svgStr=new XMLSerializer().serializeToString(clone);
+    const svgBlob=new Blob([svgStr],{type:'image/svg+xml'});
+    try{ return await createImageBitmap(svgBlob); }
+    catch{
+      return await new Promise((resolve,reject)=>{ const url=URL.createObjectURL(svgBlob); const im=new Image();
+        im.onload=()=>{resolve(im);URL.revokeObjectURL(url)}; im.onerror=e=>{reject(e);URL.revokeObjectURL(url)}; im.src=url; });
+    }
+  }
+
+  /* ======= FFmpeg helpers (fallback) ======= */
+  let __ffmpeg = null, __ffmpegLoading = null;
+  async function ensureFFmpeg(){
+    if(__ffmpeg) return __ffmpeg;
+    if(__ffmpegLoading) return __ffmpegLoading;
+    const { createFFmpeg } = FFmpeg;
+    __ffmpeg = createFFmpeg({
+      log: false,
+      corePath: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js"
+    });
+    __ffmpegLoading = __ffmpeg.load().then(()=>__ffmpeg);
+    return __ffmpegLoading;
+  }
+  async function transcodeToMP4(blobWebM, { fps=30 } = {}){
+    const ffmpeg = await ensureFFmpeg();
+    const inName  = "in.webm";
+    const outName = "out.mp4";
+    const { fetchFile } = FFmpeg;
+    ffmpeg.FS("writeFile", inName, await fetchFile(blobWebM));
+    await ffmpeg.run(
+      "-i", inName,
+      "-r", String(fps),
+      "-pix_fmt", "yuv420p",
+      "-c:v", "libx264",
+      "-profile:v", "high",
+      "-movflags", "+faststart",
+      "-an",
+      outName
+    );
+    const data = ffmpeg.FS("readFile", outName);
+    ffmpeg.FS("unlink", inName); ffmpeg.FS("unlink", outName);
+    return new Blob([data.buffer], { type: "video/mp4" });
+  }
+
+  /* ======= Export universale (MP4) ======= */
+  let finalBlob=null, finalMime='', lastUsedPath='';
+  function resetVideoResult(){
+    finalBlob=null; finalMime=''; lastUsedPath='';
+    resultVideo.pause(); resultVideo.removeAttribute('src'); resultVideo.style.display='none';
+    previewCanvas.style.display='';
+  }
+
+  async function exportVideo(){
+    if(!lottieData || !anim) throw new Error('Animazione non pronta');
+    stopPreview();
+
+    const fr = Math.min(60, Math.max(1, Math.round(lottieData.fr||30)));
+    const ip = Math.round(lottieData.ip ?? 0);
+    const op = Math.round(lottieData.op ?? anim.getDuration(true));
+    const N  = Math.max(1, op - ip);
+
+    const master=document.createElement('canvas'); master.width=MASTER_SIZE; master.height=MASTER_SIZE;
+    const mctx=master.getContext('2d');
+    const out=document.createElement('canvas'); out.width=OUT_SIZE; out.height=OUT_SIZE;
+    const octx=out.getContext('2d', { willReadFrequently: true });
+
+    anim.goToAndStop(ip, true);
+    await new Promise(r=>requestAnimationFrame(r));
+    {
+      const svgBmp0 = await rasterizeCurrentSVG();
+      mctx.fillStyle='#fff'; mctx.fillRect(0,0,MASTER_SIZE,MASTER_SIZE);
+      if(doodleCanvas){
+        mctx.drawImage(doodleCanvas,0,0,doodleCanvas.width,doodleCanvas.height, doodleDraw.x,doodleDraw.y,doodleDraw.w,doodleDraw.h);
+      }
+      if(svgBmp0){ mctx.drawImage(svgBmp0,0,0,MASTER_SIZE,MASTER_SIZE); }
+      octx.clearRect(0,0,OUT_SIZE,OUT_SIZE);
+      octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality='high';
+      octx.filter = `blur(${MICRO_BLUR}px)`;
+      octx.drawImage(master,0,0,MASTER_SIZE,MASTER_SIZE, 0,0,OUT_SIZE,OUT_SIZE);
+      octx.filter = 'none';
+    }
+
+    let blob=null, mime='video/mp4';
+
+    if(isIOS()){
+      const m = pickBestMime();
+      if(!m) throw new Error('MediaRecorder non disponibile su questo dispositivo');
+      lastUsedPath = 'MediaRecorder iOS (MP4)';
+      const stream = out.captureStream(fr);
+      const chunks=[];
+      const rec = new MediaRecorder(stream, { mimeType: m, videoBitsPerSecond: VIDEO_BITRATE });
+      rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+      rec.start();
+      let nextTick = performance.now() + 1000/fr;
+      for(let f=1; f<N; f++){
+        const frameIdx = ip + f;
+        anim.goToAndStop(frameIdx, true);
+        await new Promise(r=>requestAnimationFrame(r));
+        const svgBmp = await rasterizeCurrentSVG();
+        mctx.fillStyle='#fff'; mctx.fillRect(0,0,MASTER_SIZE,MASTER_SIZE);
+        if(doodleCanvas){
+          mctx.drawImage(doodleCanvas,0,0,doodleCanvas.width,doodleCanvas.height, doodleDraw.x,doodleDraw.y,doodleDraw.w,doodleDraw.h);
+        }
+        if(svgBmp){ mctx.drawImage(svgBmp,0,0,MASTER_SIZE,MASTER_SIZE); }
+        octx.clearRect(0,0,OUT_SIZE,OUT_SIZE);
+        octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality='high';
+        octx.filter = `blur(${MICRO_BLUR}px)`;
+        octx.drawImage(master,0,0,MASTER_SIZE,MASTER_SIZE, 0,0,OUT_SIZE,OUT_SIZE);
+        octx.filter = 'none';
+        nextTick += 1000/fr; const wait = Math.max(0, nextTick - performance.now()); if(wait>0) await sleep(wait);
+      }
+      await new Promise(res => { rec.onstop = res; rec.stop(); });
+      stream.getTracks().forEach(t=>t.stop());
+      blob = new Blob(chunks, { type: m });
+      mime = m;
+    }
+
+    if(!blob && hasWebCodecs){
+      try{
+        lastUsedPath = 'WebCodecs + Mediabunny (MP4)';
+        const { Output, Mp4OutputFormat, BufferTarget, CanvasSource } =
+          await import('https://cdn.jsdelivr.net/npm/mediabunny/+esm');
+        const output = new Output({
+          format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
+          target: new BufferTarget()
+        });
+        const videoSource = new CanvasSource(out, { codec: 'avc', bitrate: Math.max(4_000_000, VIDEO_BITRATE) });
+        output.addVideoTrack(videoSource, { frameRate: fr });
+        await output.start();
+
+        videoSource.add(0/fr, 1/fr);
+        let nextTick = performance.now() + 1000/fr;
+        for(let f=1; f<N; f++){
+          const frameIdx = ip + f;
+          anim.goToAndStop(frameIdx, true);
+          await new Promise(r=>requestAnimationFrame(r));
+          const svgBmp = await rasterizeCurrentSVG();
+          mctx.fillStyle='#fff'; mctx.fillRect(0,0,MASTER_SIZE,MASTER_SIZE);
+          if(doodleCanvas){
+            mctx.drawImage(doodleCanvas,0,0,doodleCanvas.width,doodleCanvas.height, doodleDraw.x,doodleDraw.y,doodleDraw.w,doodleDraw.h);
+          }
+          if(svgBmp){ mctx.drawImage(svgBmp,0,0,MASTER_SIZE,MASTER_SIZE); }
+          octx.clearRect(0,0,OUT_SIZE,OUT_SIZE);
+          octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality='high';
+          octx.filter = `blur(${MICRO_BLUR}px)`;
+          octx.drawImage(master,0,0,MASTER_SIZE,MASTER_SIZE, 0,0,OUT_SIZE,OUT_SIZE);
+          octx.filter = 'none';
+          videoSource.add(f/fr, 1/fr);
+
+          nextTick += 1000/fr; const wait = Math.max(0, nextTick - performance.now()); if(wait>0) await sleep(wait);
+        }
+        await output.finalize();
+        blob = new Blob([output.target.buffer], { type: 'video/mp4' });
+        mime = 'video/mp4';
+      }catch(err){
+        console.warn('Mediabunny/WebCodecs fallito:', err);
+        blob = null;
+      }
+    }
+
+    if(!blob){
+      const m = pickBestMime();
+      if(!m) throw new Error('MediaRecorder non disponibile su questo browser');
+      lastUsedPath = `MediaRecorder Desktop (${m.includes('mp4')?'MP4':'WebM'})`;
+
+      const stream = out.captureStream(fr);
+      const chunks=[];
+      const rec = new MediaRecorder(stream, { mimeType: m, videoBitsPerSecond: VIDEO_BITRATE });
+      rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+      rec.start();
+      let nextTick = performance.now() + 1000/fr;
+      for(let f=1; f<N; f++){
+        const frameIdx = ip + f;
+        anim.goToAndStop(frameIdx, true);
+        await new Promise(r=>requestAnimationFrame(r));
+        const svgBmp = await rasterizeCurrentSVG();
+        mctx.fillStyle='#fff'; mctx.fillRect(0,0,MASTER_SIZE,MASTER_SIZE);
+        if(doodleCanvas){
+          mctx.drawImage(doodleCanvas,0,0,doodleCanvas.width,doodleCanvas.height, doodleDraw.x,doodleDraw.y,doodleDraw.w,doodleDraw.h);
+        }
+        if(svgBmp){ mctx.drawImage(svgBmp,0,0,MASTER_SIZE,MASTER_SIZE); }
+        octx.clearRect(0,0,OUT_SIZE,OUT_SIZE);
+        octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality='high';
+        octx.filter = `blur(${MICRO_BLUR}px)`;
+        octx.drawImage(master,0,0,MASTER_SIZE,MASTER_SIZE, 0,0,OUT_SIZE,OUT_SIZE);
+        octx.filter = 'none';
+        nextTick += 1000/fr; const wait = Math.max(0, nextTick - performance.now()); if(wait>0) await sleep(wait);
+      }
+      await new Promise(res => { rec.onstop = res; rec.stop(); });
+      stream.getTracks().forEach(t=>t.stop());
+      blob = new Blob(chunks, { type: m });
+      mime = m;
+
+      if(!mime.includes('mp4')){
+        setStatus('Convert to MP4…');
+        try{
+          blob = await transcodeToMP4(blob, { fps: fr });
+          mime = 'video/mp4';
+        }catch(e){
+          console.error(e);
+          throw new Error('Conversione a MP4 non riuscita. Prova un altro browser o riduci risoluzione/FPS.');
+        }
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    resultVideo.src = url; resultVideo.loop = true; resultVideo.controls = true;
+    resultVideo.style.display='block'; previewCanvas.style.display='none';
+    resultVideo.currentTime = 0; resultVideo.play().catch(()=>{});
+    debouncedReeval();
+
+    finalBlob = blob; finalMime = mime;
+    return { blob, mime };
+  }
+
+  /* ======= Pipeline principale ======= */
+  async function cookComposition(){
+    try{
+      resetVideoResult();
+      setShareVisible(false);
+
+      // FIX: se c'era l'example MP4, nascondilo e riapri il canvas
+      if (exampleVideo){ exampleVideo.pause(); exampleVideo.style.display = 'none'; }
+      previewCanvas.style.display = '';
+
+      setStatus('Cooking…'); showCenterPop('Cooking…');
+
+      const raw = ((idCtrl && idCtrl.value != null) ? idCtrl.value : '').trim();
+      const id = parseInt(raw,10);
+      if(!Number.isFinite(id) || id<0){ setStatus('Enter a valid ID (≥0).'); return; }
+
+      await loadMaps();
+
+      const data = '0xc87b56dd' + pad32hex(id);
+      const res  = await rpcCall('eth_call', [{to:DEFAULT_CONTRACT, data}, 'latest']);
+      if(!res) throw new Error('RPC not responding');
+      const tokenUri = decodeAbiString(res);
+      if(!tokenUri) throw new Error('tokenURI not available');
+      const meta = await fetchJsonAny(ipfsUrls(tokenUri));
+      if(!meta) throw new Error('Metadata not available');
+
+      const imageUri = meta.image || meta.image_url || meta.imageIpfs;
+      let baseBlob = null;
+      if(imageUri) baseBlob = await fetchBlobAny(ipfsUrls(imageUri));
+      if(!baseBlob){
+        for(const p of [`./doodles/${id}.png`, `./${id}.png`]){ try{ const rr=await fetch(p); if(rr.ok){ baseBlob=await rr.blob(); break; } }catch{} }
+        if(!baseBlob) throw new Error('No Doodle image found');
+      }
+
+      const qs = new URLSearchParams(location.search);
+      const compId = qs.get('comp') || 'KoreanHeart';
+      await loadAnimatedManifest(); await loadRecipes();
+      currentItem = getCompCfg(compId) || { id: compId, name: compId };
+      currentRecipe = getRecipe(currentItem.recipeId || 'KoreanHeart_Default');
+      if(!currentRecipe) throw new Error('Recipe not found');
+	  
+	  const layoutName = (currentItem?.name || currentItem?.id || 'Composition') + '';
+	  lastLayoutName = layoutName;
+	  lastCookedId   = id;
+      ovName.textContent = currentItem.name || currentItem.id;
+      ovAuthor.textContent = currentItem.author ? `by ${currentItem.author}` : '';
+      (function footer(){
+        const name = (currentItem.author || '').toString().trim();
+        const handleRaw = (currentItem.authorHandle || currentItem.x || currentItem.twitter || '').toString().trim();
+        const handle = handleRaw.replace(/^@/, '');
+        const url = (currentItem.authorUrl && currentItem.authorUrl.trim()) || (handle ? `https://x.com/${handle}` : '');
+        const hasName = !!name, hasHandle = !!handle;
+        if(!hasName && !hasHandle){ madeBy.style.display='none'; return; }
+        madeBy.style.display='flex';
+        mbName.textContent = hasName ? name : (hasHandle ? '@'+handle : '');
+        mbSep.style.display = (hasName && hasHandle) ? '' : 'none';
+        if(hasHandle){ mbHandle.textContent='@'+handle; mbHandle.style.display=''; } else { mbHandle.style.display='none'; }
+        if(url){ madeByLink.href=url; madeByLink.style.pointerEvents=''; } else { madeByLink.removeAttribute('href'); madeByLink.style.pointerEvents='none'; }
+      })();
+      if(currentItem.badge){ ovBadge.textContent=currentItem.badge; ovBadge.style.display='inline-block'; if(currentItem.badgeColor) ovBadge.style.background=currentItem.badgeColor; } else { ovBadge.style.display='none'; }
+
+      const rowMeta = META[id] || {};
+      if(currentRecipe?.steps?.knockout?.enabled){
+        const bmp = await createImageBitmap(baseBlob, { colorSpaceConversion:'none', premultiplyAlpha:'default' });
+        const cut = await knockoutProcess(bmp, currentRecipe.steps.knockout.params || { ink:64, gap:-1, edge:18, feather:1.2 });
+        doodleCanvas = cut.fullCanvas;
+      }else{
+        const img = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=URL.createObjectURL(baseBlob); });
+        const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+        c.getContext('2d').drawImage(img,0,0); doodleCanvas=c;
+      }
+
+      if(doodleCanvas.width===MASTER_SIZE && doodleCanvas.height===MASTER_SIZE){
+        doodleDraw={x:0,y:0,w:MASTER_SIZE,h:MASTER_SIZE};
+      }else{
+        const W=doodleCanvas.width,H=doodleCanvas.height,s=Math.min(MASTER_SIZE/W,MASTER_SIZE/H);
+        doodleDraw={x:0,y:0,w:Math.round(W*s),h:Math.round(H*s)};
+      }
+
+      const animPath = currentRecipe?.animation?.file || '';
+      if(!animPath) throw new Error('Animation file missing in recipe');
+      const animResp = await fetch(animPath, { cache:'no-cache' });
+      if(!animResp.ok) throw new Error('Animation json not found');
+      const animJson = await animResp.json();
+      await loadLottieFrom(animJson);
+
+      const skinName = (rowMeta.Skin_colors || rowMeta.skin_colors || rowMeta.Skin || '').trim();
+      const sleeveName = (rowMeta.Sleeve_colors || rowMeta.sleeve_colors || rowMeta.Sleeve || '').trim();
+      applyRecolor(currentRecipe, { ...rowMeta, Skin_colors: skinName, Sleeve_colors: sleeveName });
+
+      sizeViewer();
+      startPreview();
+
+      exBadge && (exBadge.style.display='none');
+      oopsEl && (oopsEl.style.display='none');
+      hideCenterPop();
+      setShareVisible(true);
+      setStatus(`Dood ${id}: Cooked and ready!`);
+      reevaluateMode();
+
+    }catch(e){
+      console.error(e);
+      setStatus('❌ ' + (e?.message || 'Something went wrong'));
+      showCenterPop('Error', (e?.message || 'Something went wrong'), 2000);
+      setShareVisible(false);
+    }
+  }
+
+  /* ======= Share / Copy (video) ======= */
+  async function ensureVideoReady(){
+    if(finalBlob) return { blob: finalBlob, mime: finalMime };
+    showCenterPop('Cooking..');
+    const out = await exportVideo().catch(e=>{ hideCenterPop(); throw e; });
+    hideCenterPop();
+    return out;
+  }
+
+  async function shareMobile(){
+    try{
+      const { blob, mime } = await ensureVideoReady();
+      const file = new File([blob], `composition.${mime.includes('mp4')?'mp4':'webm'}`, { type: mime });
+      if (navigator.canShare && navigator.canShare({ files:[file] })){
+        // ricava nome/ID anche se non hai appena “cucinato”
+		const layoutName = lastLayoutName || currentItem?.name || currentItem?.id || 'Composition';
+		const id = lastCookedId ?? (idCtrl?.value ? parseInt(String(idCtrl.value).trim(), 10) : null);
+
+		const caption = `Cooked "${layoutName}" on Doods #${(Number.isFinite(id) ? id : '?')} !
+
+		Get yours at https://arb8i.xyz !`;
+
+		// opzionale: copia anche il testo negli appunti
+		try { await navigator.clipboard.writeText(caption); } catch {}
+
+		await navigator.share({ files:[file], text: caption, title: 'ARB8i Lab' });
+
+      } else {
+        const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+        a.download=`composition.${mime.includes('mp4')?'mp4':'webm'}`; document.body.appendChild(a); a.click(); a.remove();
+      }
+    }catch(e){ console.warn(e); }
+  }
+
+  async function copyVideoOrDownload(){
+    try{
+      const { blob, mime } = await ensureVideoReady();
+      const type = mime.includes('mp4') ? 'video/mp4' : 'video/webm';
+      if (navigator.clipboard && window.ClipboardItem){
+        try{
+          await navigator.clipboard.write([ new ClipboardItem({ [type]: blob }) ]);
+          showCenterPop('Copied!', 'Video copied to clipboard ✅', 1600);
+          return;
+        }catch{ /* fallback */ }
+      }
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download=`composition.${mime.includes('mp4')?'mp4':'webm'}`; document.body.appendChild(a); a.click(); a.remove();
+      showCenterPop('Downloaded', 'Video saved to your device', 1600);
+    }catch(e){
+      console.error(e);
+      showCenterPop('Error', e?.message||'Copy failed', 1600);
+    }
+  }
+
+  /* ======= Init ======= */
+  (async function init(){
+    try{
+      await loadAnimatedManifest(); await loadRecipes();
+
+      const qs = new URLSearchParams(location.search);
+      const compId = qs.get('comp') || 'KoreanHeart';
+      currentItem = getCompCfg(compId) || { id: compId, name: compId };
+      currentRecipe = getRecipe(currentItem.recipeId || 'KoreanHeart_Default');
+
+      ovName.textContent = currentItem.name || currentItem.id;
+      ovAuthor.textContent = currentItem.author ? `by ${currentItem.author}` : '';
+      if(currentItem.badge){ ovBadge.textContent=currentItem.badge; ovBadge.style.display='inline-block'; if(currentItem.badgeColor) ovBadge.style.background=currentItem.badgeColor; } else { ovBadge.style.display='none'; }
+
+      const viewerLink = document.getElementById('viewerLink');
+		if (viewerLink) {
+		  const u = new URL('./Doodles_trait-viewer.html', location.href);
+		  u.searchParams.set('source', 'editor_animator');
+		  u.searchParams.set('comp', currentItem.id);   // es. KoreanHeart
+		  viewerLink.href = u.toString();
+		}
+		try { localStorage.setItem('lastComp', currentItem.id); } catch {}
+
+
+
+      /* FIX: mostra MP4 di esempio se presente e nascondi il canvas */
+      const poster = (currentItem.preview && (currentItem.preview.poster || currentItem.thumb)) || `thumbs/${currentItem.id}.png`;
+      if (exampleVideo){
+        if (currentItem.preview?.mp4){
+          exampleVideo.poster = poster;
+          exampleVideo.src = currentItem.preview.mp4;
+          exampleVideo.style.display = 'block';
+          previewCanvas.style.display = 'none';    // FIX: nascondi canvas quando mostri l’esempio
+          exampleVideo.play().catch(()=>{});
+        } else {
+          exampleVideo.style.display = 'none';
+          previewCanvas.style.display = '';        // canvas visibile se non c’è video di esempio
+        }
+      }
+
+      sizeViewer(); setShareVisible(false);
+      reevaluateMode();
+
+// --- AUTO-COOK: se arrivo dal Viewer con ?lock=1, avvia subito
+const qs2 = new URLSearchParams(location.search);
+const lock = qs2.get('lock') === '1';
+
+if (lock) {
+  // aspetta 1 frame così initIdControl legge l'id dall'URL/localStorage
+  requestAnimationFrame(async () => {
+    // prendi l'id: prima da query, poi dal controllo, poi da localStorage
+    const qsid = qs2.get('id');
+    const idFromCtrl = (idCtrl && idCtrl.value != null) ? String(idCtrl.value) : null;
+    let id = qsid || idFromCtrl || localStorage.getItem('lastId');
+
+    if (id != null) {
+      // allinea il control in silenzio (se disponibile)
+      try { idCtrl?.setValue?.(String(id), { silent: true }); } catch {}
+      await cookComposition();
+
+      // pulizia: rimuovi lock=1 per evitare re-trigger al refresh
+      const clean = new URLSearchParams(location.search);
+      clean.delete('lock');
+      const q = clean.toString();
+      history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+    } else {
+      setStatus('Pick an ID first (Find it here).');
+    }
+  });
+}
+
+
+    }catch(e){
+      setStatus(e?.message || 'Init error');
+    }
+  })();
+
+  /* ======= Events ======= */
+  shareBtn?.addEventListener('click', shareMobile);
+  copyBtn?.addEventListener('click', copyVideoOrDownload);
+  </script>
+</body>
+</html>

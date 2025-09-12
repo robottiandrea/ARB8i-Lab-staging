@@ -1,0 +1,1063 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ARB8i — Trait Viewer</title>
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles/common.css">  
+
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f1115">
+
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Doodles">
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  }
+</script>
+
+  
+<style>
+  :root{
+  --side-w: clamp(220px, 28vw, 330px);
+  --gap: 18px;
+}
+
+/* wrapper a piena larghezza, sidebar attaccata a sx */
+.wrap{ max-width:none; margin:0; padding:0; }
+
+/* layout 2 colonne: [sidebar | contenuto] */
+.layout{
+  display:grid;
+  grid-template-columns: var(--side-w) 1fr;
+  gap: var(--gap);
+  align-items:start;
+  padding: 0 28px 28px 0;
+}
+
+/* pannelli */
+.panel{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+}
+
+/* SIDEBAR sticky (una sola scrollbar: di pagina) */
+.sidebar{
+  grid-column:1;
+  position: sticky;
+  top: max(12px, env(safe-area-inset-top));
+  align-self:start;
+  z-index:10;
+}
+.sidebar .sticky{ position: static; }
+.filters-scroll{ max-height: none; overflow: visible; padding-right: 0; }
+
+/* contenuto: riempie tutto lo spazio a destra */
+.results{
+  grid-column:2;
+  width:100%;
+  max-width:none;
+  justify-self:stretch;
+}
+
+/* griglia card */
+.grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px,1fr));
+  gap:14px;
+  justify-content:center;
+}
+
+/* --- Inputs: ID + Global Search (versione definitiva) --- */
+
+/* contenitore ID */
+.id-search{ display:grid; gap:6px; margin-bottom:10px }
+
+/* stile base degli input */
+.control{
+  width:100%;
+  padding:8px 10px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:#0d1016;
+  color:var(--text);
+  font-size:13px; /* base */
+}
+
+/* in sidebar vogliamo testo a 16px (niente zoom iOS) */
+.sidebar .control{ font-size:16px; }
+.sidebar .control::placeholder{ font-size:inherit; opacity:.75; }
+
+/* wrapper per avere la X interna */
+.input-clear{ position:relative; }
+.input-clear .control{ padding-right:34px; } /* spazio per la X */
+
+/* bottone "clear" minimal, senza cerchio; X SVG centrata */
+.clear-btn{
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  width:32px; height:32px; padding:0;
+  border:0; background:transparent; border-radius:0;
+  display:none; cursor:pointer;
+}
+.clear-btn.show{ display:block; }
+
+.clear-btn::before{
+  content:"";
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:14px; height:14px;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M1 1L13 13M13 1L1 13" stroke="%23b8bec9" stroke-width="2" stroke-linecap="round"/></svg>')
+             no-repeat center center;
+  opacity:.8;
+}
+.clear-btn:hover::before{ opacity:1; }
+.clear-btn:focus-visible{ outline:2px solid #2b62ff; outline-offset:2px; border-radius:6px; }
+
+  /* --- Global trait search --- */
+.traits-search{
+  display:flex; align-items:center; gap:10px;
+  margin: 8px 0 12px 0;
+}
+
+
+/* Utility per nascondere gruppi/label */
+.is-hidden{ display:none !important; }
+
+/* summary con contatore a destra */
+summary{
+  cursor:pointer; outline:none; user-select:none; font-weight:600;
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+}
+summary .sum-count{
+  color: var(--muted);
+  font-weight:600;
+  opacity:.9;
+}
+
+details{ border:1px solid var(--border); border-radius:12px; padding:10px; background:#0d1016; }
+details .filter-search.control { margin-bottom: 12px; }
+
+/* --- Scroll SOLO dentro la lista dei checkbox, con poche righe visibili --- */
+.values{
+  --rows: 5;        /* quante righe visibili prima della scrollbar */
+  --row-min: 28px;  /* altezza minima di una riga */
+  --row-gap: 6px;   /* SPAZIO TRA LE RIGHE */
+
+  display: grid;
+  row-gap: var(--row-gap);
+
+  /* include anche i gap nel max-height, così vedi davvero N righe */
+  max-height: calc(var(--rows) * var(--row-min) + (var(--rows) - 1) * var(--row-gap));
+  overflow: auto;
+
+  /* riserva il canale della scrollbar, così non copre i numeri */
+  scrollbar-gutter: stable;
+}
+/* Fallback dove scrollbar-gutter non c'è (alcuni Safari/vecchi) */
+@supports not (scrollbar-gutter: stable){
+  .values{ padding-inline-end: 12px; }  /* spazio fisso a destra */
+}
+
+.values label{
+  display: grid;
+  grid-template-columns: auto 1fr 6ch; /* [☑] [testo] [(123)] */
+  /* ↑ 6ch basta per "(123)". Se arrivi a 4 cifre usa 7ch/8ch. */
+  align-items: start;
+  column-gap: 12px;
+  min-height: var(--row-min);
+}
+
+.values input{ margin-top: 2px; }
+.values label span{ line-height: 1.2; }
+.values label .count{
+  white-space: nowrap;
+  opacity: .8;
+  justify-self: end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  padding-inline-end: 0;
+}
+
+.values::-webkit-scrollbar{ width:10px; }
+.values::-webkit-scrollbar-thumb{
+  background:#2a3142; border-radius:8px; border:2px solid #0d1016;
+}
+
+/* Active chips */
+.active-wrap{ margin-top:10px; }
+.active-label{ font-size:12px; color:var(--muted); margin:6px 0 4px }
+.active-chips{ display:flex; flex-wrap:wrap; gap:6px }
+.chip-active{
+  display:inline-flex; align-items:center; gap:6px;
+  background:#0d1016; border:1px solid var(--border);
+  color:var(--text); padding:6px 8px; border-radius:999px; font-size:12px
+}
+.chip-active .x{ cursor:pointer; opacity:.75; }
+.chip-active .x:hover{ opacity:1; }
+
+/* iPhone/telefoni */
+@media (max-width: 768px){
+  /* Sidebar più stretta sotto 768px, ma sempre fluida */
+  :root{
+    --side-w: clamp(160px, 42vw, 260px); /* niente fisso, min più basso */
+  }
+  .layout{
+    grid-template-columns: var(--side-w) 1fr; /* restano 2 colonne */
+    gap: var(--gap);
+    padding: 0 12px 16px 0;                   /* già allineato al tuo layout */
+  }
+  
+  /* Card più “flessibili” (prima min 160px) */
+  .grid{
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+  
+  .sidebar{
+    grid-column:1;
+    position: sticky;
+    top: max(12px, env(safe-area-inset-top));
+    align-self:start;
+    z-index:10;
+  }
+  .filters-scroll{
+    max-height: none;
+    overflow: visible;
+    -webkit-overflow-scrolling: auto;
+
+    /* Evita zoom su focus degli input su iOS */
+    input, button, select, textarea, .control{ font-size:16px; }
+  
+    /* Cintura e bretelle contro qualsiasi spillover */
+    html, body{ overflow-x:hidden; }
+  }
+}
+  
+</style>
+</head>
+<body>
+  
+
+  <main class="wrap">
+    <div class="header">
+      <a class="back" href="index.html">← Gallery</a>
+      <div>
+        <h1>ARB8i — Trait Viewer</h1>
+        <div class="sub">Select traits and find your Dood!</div>
+      </div>
+    </div>
+
+
+    <div class="layout">
+      <!-- Sidebar -->
+      <aside class="panel sidebar">
+        <div class="sticky">
+          <!-- ID -->
+          <div class="id-search input-clear">
+            <input id="idSearch" class="control" type="text"
+                   inputmode="numeric" placeholder="8929" autocomplete="off">
+            <button type="button" class="clear-btn" data-clear-for="idSearch" aria-label="Pulisci"></button>
+          </div>
+          
+          <!-- Global trait search -->
+          <div class="traits-search input-clear">
+            <input id="traitSearch" class="control" type="text"
+                   inputmode="search" enterkeyhint="search"
+                   placeholder="green mullet" autocomplete="off" autocapitalize="off" autocorrect="off">
+            <button type="button" class="clear-btn" data-clear-for="traitSearch" aria-label="Pulisci"></button>
+          </div>
+
+
+          
+          <!-- Trait filters -->
+          <div class="filters-scroll">
+            <div class="filters" id="filters"><!-- dynamic --></div>
+          </div>
+
+          <!-- Active filters -->
+          <div id="activeWrap" class="active-wrap" style="display:none">
+            <div class="active-label">Active filters</div>
+            <div id="activeChips" class="active-chips"></div>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="toolbar">
+            <div class="left">
+              <span id="summary" class="chip">0 results</span>
+            </div>
+            <div class="right">
+              <button class="btn" id="resetBtn">Reset</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Results -->
+      <section class="panel results">
+        <div class="grid" id="grid"></div>
+        <div id="sentinel" aria-hidden="true" style="height:1px"></div>
+        <div id="empty" class="empty" style="display:none">No results for the selected filters.</div>
+        <div class="toolbar" style="margin-top:16px">
+          <button class="btn btn-primary" id="moreBtn" style="display:none">Load more</button>
+          <div class="status" id="status"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+<script>
+/*** Config ***/
+const IPFS_GW = [
+  'https://dweb.link/ipfs/',
+  'https://ipfs.io/ipfs/',
+  'https://gateway.pinata.cloud/ipfs/',
+  'https://cloudflare-ipfs.com/ipfs/',
+];
+
+/*** DOM ***/
+const $ = s => document.querySelector(s);
+const filtersEl = $('#filters');
+const gridEl = $('#grid');
+const emptyEl = $('#empty');
+const statusEl = $('#status');
+const summaryEl = $('#summary');
+const resetBtn = $('#resetBtn');
+const idSearchEl = $('#idSearch');
+const activeWrapEl = $('#activeWrap');
+const activeChipsEl = $('#activeChips');
+
+
+// Meta-param dal querystring
+const QS = new URLSearchParams(location.search);
+const SOURCE_PARAM  = QS.get('source')  || '';   // "index" | "editor" | "editor_animator"
+const TAB_PARAM     = QS.get('tab')     || '';   // "overlays" | "animated"
+const OVERLAY_PARAM = QS.get('overlay') || '';   // overlay (editor statico)
+const COMP_PARAM    = QS.get('comp')    || '';   // comp (editor animato)
+
+// Stato persistito
+const LAST_OVERLAY = localStorage.getItem('lastOverlay') || '';
+let   LAST_COMP    = localStorage.getItem('lastComp')    || '';
+if (COMP_PARAM) { try { localStorage.setItem('lastComp', COMP_PARAM); LAST_COMP = COMP_PARAM; } catch {} }
+
+// Pulisci la barra: questi param non devono finire tra i filtri
+if (QS.has('source') || QS.has('tab') || QS.has('overlay') || QS.has('comp')) {
+  QS.delete('source');
+  QS.delete('tab');
+  QS.delete('overlay');
+  QS.delete('comp');
+  const q = QS.toString();
+  history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+}
+
+
+/*** State ***/
+let ALL = [];                  // [{id, image, attrs:{trait:value,...}}]
+let ALL_IDS = new Set();       // all ids
+let BY_ID = new Map();         // id -> obj
+let TRAITS = {};               // { trait: Set(values) }
+let VALUE_COUNTS = {};         // { trait: { value: count } }
+let INDEX = {};                // { trait: { value: Set(ids) } }
+let TRAIT_BLOCKS = new Map();  // trait -> <details> node
+let GLOBAL_QN = "";            // query normalizzata della ricerca globale tratti
+
+  
+let selected = {};             // { trait: Set(values) }
+let results = [];              // current filtered ids
+let page = 0, pageSize = 60;   // pagination
+// infinite scroll
+let io = null, ioBusy = false;
+  
+// ID filter
+let idFilterRaw = '';
+let idFilterSet = null;
+
+function norm(s){ return String(s||"").toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'').trim(); }
+
+/*** Utils ***/
+const IMG_TIMEOUT_MS = 2000;   // dopo 4s passa al gateway successivo
+const PLACEHOLDER_SVG =
+  'data:image/svg+xml;utf8,' + encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+    <rect width="100%" height="100%" fill="#0d1016"/>
+    <g fill="#2a3142" transform="translate(128,128)">
+      <rect x="0" y="0" width="256" height="256" rx="12"/>
+      <circle cx="96" cy="96" r="40"/>
+    </g>
+  </svg>`);
+
+// Prova i gateway in cascata con timeout
+function attachImgFallback(img, urls){
+  let i = 0, timer = null, done = false;
+
+  const stop = () => { done = true; if(timer) clearTimeout(timer); };
+  const next = () => {
+    if (done) return;
+    const url = urls[i++];
+    if (!url){
+      img.src = PLACEHOLDER_SVG;
+      img.classList.add('ok');
+      return;
+    }
+    // prepara handlers per questo tentativo
+    img.onload = () => { stop(); img.classList.add('ok'); };
+    img.onerror = () => { if(done) return; next(); };
+    // timeout “gateway impallato”
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { if(!done) next(); }, IMG_TIMEOUT_MS);
+    img.src = url;
+  };
+
+  next();
+}
+  
+function setStatus(t){ statusEl.textContent = t || ''; }
+function ipfsToUrls(uri){ if(!uri) return []; if(uri.startsWith('ipfs://')){ const p = uri.slice(7); return IPFS_GW.map(g=>g+p); } return [uri]; }
+function esc(str){ return String(str).replace(/[&<>"'`=\/]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','=':'&#x3D;','`':'&#x60;'}[s])); }
+
+function unionSets(a,b){ if(!a) return new Set(b); if(!b) return new Set(a); const res=new Set(a); for(const x of b) res.add(x); return res; }
+function intersectSets(a,b){ if(!a) return new Set(b); if(!b) return new Set(a); const small=a.size<=b.size?a:b, big=a.size<=b.size?b:a; const res=new Set(); for(const x of small) if(big.has(x)) res.add(x); return res; }
+function intersectMany(arr){ if(!arr.length) return null; arr.sort((x,y)=>x.size-y.size); let acc=new Set(arr[0]); for(let i=1;i<arr.length;i++){ if(!acc.size) return acc; acc=intersectSets(acc,arr[i]); } return acc; }
+function countIntersection(a,b){ if(!a && !b) return ALL_IDS.size; if(!a) return b.size; if(!b) return a.size; const small=a.size<=b.size?a:b, big=a.size<=b.size?b:a; let c=0; for(const x of small) if(big.has(x)) c++; return c; }
+
+async function copyTextToClipboard(text){
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  }catch{}
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text; ta.style.position='fixed'; ta.style.left='-9999px';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const ok=document.execCommand('copy'); document.body.removeChild(ta);
+    return !!ok;
+  }catch{ return false; }
+}
+
+/*** Parse ID filter ***/
+function parseIdQuery(raw){
+  const txt = String(raw||'').trim();
+  if(!txt){ idFilterRaw=''; idFilterSet=null; return; }
+  const parts = txt.split(/[,\s]+/).filter(Boolean);
+  const ids = new Set();
+  for(const p of parts){
+    const mR = p.match(/^(\d+)\-(\d+)$/);
+    if(mR){
+      let a = +mR[1], b = +mR[2];
+      if(a>b) [a,b] = [b,a];
+      for(let i=a;i<=b;i++) if(BY_ID.has(i)) ids.add(i);
+      continue;
+    }
+    if(/^\d+$/.test(p)){ const n=+p; if(BY_ID.has(n)) ids.add(n); }
+  }
+  idFilterRaw = txt;
+  idFilterSet = ids.size ? ids : new Set();
+}
+
+/*** Load local metadata ***/
+async function loadMeta(){
+  setStatus('Loading local metadata…');
+  const data = await fetch('./Doodles_all_metadata.json').then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!data){ setStatus('❌ Unable to read Doodles_all_metadata.json'); return false; }
+
+  ALL = Object.entries(data).map(([id,obj])=>{
+    const attrs = {};
+    if(Array.isArray(obj.attributes)){
+      for(const a of obj.attributes){
+        if(!a || !a.trait_type) continue;
+        attrs[a.trait_type] = a.value;
+      }
+    }
+    return { id: Number(id), image: obj.image, attrs };
+  }).sort((a,b)=>a.id-b.id);
+
+  BY_ID = new Map(ALL.map(o=>[o.id, o]));
+  ALL_IDS = new Set(ALL.map(o=>o.id));
+
+  TRAITS = {};
+  VALUE_COUNTS = {};
+  INDEX = {};
+  for(const t of ALL){
+    for(const [trait,val] of Object.entries(t.attrs)){
+      (TRAITS[trait]||(TRAITS[trait]=new Set())).add(val);
+      (VALUE_COUNTS[trait]||(VALUE_COUNTS[trait]={}))[val] = (VALUE_COUNTS[trait][val]||0)+1;
+      ((INDEX[trait]||(INDEX[trait]={}))[val]||(INDEX[trait][val]=new Set())).add(t.id);
+    }
+  }
+
+  setStatus('');
+  return true;
+}
+
+/*** Filters UI ***/
+function makeTraitBlock(trait, values){
+  const idBase = trait.toLowerCase().replace(/\s+/g,'_').replace(/[^\w\-]/g,'');
+  const labels = Array.from(values).sort((a,b)=>String(a).localeCompare(String(b)));
+
+  const wrap = document.createElement('details');
+  wrap.open = false;
+  wrap.setAttribute('data-trait', trait);
+
+  // summary con nome + contatore dinamico
+  const summary = document.createElement('summary');
+  const sName = document.createElement('span');
+  sName.className = 'sum-name';
+  sName.textContent = trait;
+  const sCount = document.createElement('span');
+  sCount.className = 'sum-count';
+  sCount.textContent = ''; // verrà popolato in updateAvailability
+  summary.appendChild(sName);
+  summary.appendChild(sCount);
+  wrap.appendChild(summary);
+
+  const search = document.createElement('input');
+  search.type = 'text'; // <- niente X blu nativa su iOS
+  search.className = 'filter-search control';
+  search.placeholder = 'Search…';
+  search.setAttribute('data-trait', trait);
+  // opzionale, per UX:
+  search.setAttribute('inputmode','search');
+  search.setAttribute('enterkeyhint','search');
+  search.autocomplete = 'off';
+  search.autocapitalize = 'off';
+  search.spellcheck = false;
+  wrap.appendChild(search);
+
+
+  const valuesEl = document.createElement('div');
+  valuesEl.className = 'values';
+  wrap.appendChild(valuesEl);
+
+  for(const val of labels){
+    const cid = `${idBase}__${String(val).toLowerCase().replace(/\s+/g,'_').replace(/[^\w\-]/g,'')}`;
+    const count = VALUE_COUNTS[trait]?.[val] || 0;
+
+    const lbl = document.createElement('label');
+    lbl.dataset.value = String(val).toLowerCase();
+    lbl.dataset.impossible = '0';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = cid;
+    input.setAttribute('data-trait', trait);
+    input.setAttribute('data-value', val);
+
+    const spanText = document.createElement('span');
+    spanText.textContent = val;
+
+    const spanCount = document.createElement('span');
+    spanCount.className = 'count';
+    spanCount.textContent = `(${count})`;
+
+    lbl.appendChild(input);
+    lbl.appendChild(spanText);
+    lbl.appendChild(spanCount);
+    valuesEl.appendChild(lbl);
+  }
+
+  return wrap;
+}
+
+function renderFilters(){
+  filtersEl.innerHTML = '';
+  TRAIT_BLOCKS.clear();
+  const traits = Object.keys(TRAITS).sort((a,b)=>a.localeCompare(b));
+  for(const trait of traits){
+    const block = makeTraitBlock(trait, TRAITS[trait]);
+    TRAIT_BLOCKS.set(trait, block);
+    filtersEl.appendChild(block);
+  }
+}
+
+/*** Active chips ***/
+function renderActiveChips(){
+  activeChipsEl.innerHTML = '';
+  const entries = [];
+  for(const [trait,set] of Object.entries(selected)){
+    for(const val of set) entries.push({type:'trait', trait, val});
+  }
+  if(idFilterRaw) entries.push({type:'ids', trait:'ID', val:idFilterRaw});
+
+  if(entries.length === 0){ activeWrapEl.style.display = 'none'; return; }
+  activeWrapEl.style.display = '';
+
+  for(const it of entries){
+    const chip = document.createElement('div');
+    chip.className = 'chip-active';
+    chip.setAttribute('data-type', it.type);
+    chip.setAttribute('data-trait', it.trait);
+    chip.setAttribute('data-value', it.val);
+    chip.innerHTML = `<span>${esc(it.trait)}: <strong>${esc(it.val)}</strong></span><span class="x" aria-label="Remove">×</span>`;
+    activeChipsEl.appendChild(chip);
+  }
+}
+
+function updateAvailability(){
+  const selectedTraits = Object.keys(selected);
+
+  // OR per ciascun tratto selezionato
+  const unions = {};
+  for (const t of selectedTraits){
+    let u = null;
+    for (const v of selected[t]){
+      const s = INDEX[t]?.[v]; if (!s) continue;
+      u = unionSets(u, s);
+    }
+    unions[t] = u || new Set();
+  }
+
+  for (const trait of Object.keys(TRAITS)){
+    // AND tra gli altri tratti
+    const otherSets = [];
+    for (const t of selectedTraits){
+      if (t === trait) continue;
+      otherSets.push(unions[t]);
+    }
+    let pool = intersectMany(otherSets); // null = all
+
+    // filtro per ID
+    if (idFilterSet !== null){
+      if (idFilterSet.size === 0){
+        pool = new Set();
+      } else {
+        pool = pool ? intersectSets(pool, idFilterSet) : new Set(idFilterSet);
+      }
+    }
+
+    const block = TRAIT_BLOCKS.get(trait);
+    if (!block) continue;
+
+    const labels = block.querySelectorAll('.values label');
+
+    // >>> [INSERIMENTO ESATTO] query locale normalizzata (UNA VOLTA, fuori dal loop)
+    const qLocalNorm = norm(block.querySelector('.filter-search')?.value || '');
+    // <<<
+
+    let availableCount = 0; // opzioni attivabili (cnt>0 o già selezionate)
+    let visibleInGroup = 0; // opzioni VISIBILI dopo filtri testuali
+
+    for (const lbl of labels){
+      const cb = lbl.querySelector('input[type="checkbox"]');
+      const valueKey = cb.getAttribute('data-value');
+      const setVal = INDEX[trait]?.[valueKey] || new Set();
+
+      const cnt = (pool === null) ? setVal.size : countIntersection(pool, setVal);
+
+      // aggiorna contatore singola voce
+      const cntEl = lbl.querySelector('.count');
+      if (cntEl) cntEl.textContent = `(${cnt})`;
+
+      const isChecked = cb.checked;
+      const impossible = (!isChecked && cnt === 0);
+
+      lbl.dataset.impossible = impossible ? '1' : '0';
+      cb.disabled = impossible;
+      lbl.classList.toggle('no-available', impossible);
+
+      if (cnt > 0 || isChecked) availableCount++;
+
+      // --- filtro testo: GLOBALE + LOCALE (entrambi inclusivi)
+      const valText = lbl.dataset.value || '';
+      const matchesGlobal = !GLOBAL_QN  || norm(valText).includes(GLOBAL_QN);
+      const matchesLocal  = !qLocalNorm || norm(valText).includes(qLocalNorm);
+
+      const show = !impossible && matchesGlobal && matchesLocal;
+      lbl.style.display = show ? '' : 'none';
+      if (show) visibleInGroup++;
+    }
+
+    // nascondi l’intero gruppo se non resta nulla visibile
+    block.classList.toggle('is-hidden', visibleInGroup === 0);
+
+    // badge nel summary:
+    // - SENZA ricerca testuale: (availableCount)
+    // - CON ricerca (globale o locale): (visibili/totali)
+    const sc = block.querySelector('.sum-count');
+    if (sc){
+      const totalInGroup = labels.length;
+      const textFilterOn = !!GLOBAL_QN || !!qLocalNorm;
+      sc.textContent = textFilterOn ? `(${visibleInGroup}/${totalInGroup})`
+                                    : `(${availableCount})`;
+    }
+  }
+}
+
+
+
+/*** Filtering ***/
+function applyFilters(){
+  const selectedTraits = Object.keys(selected);
+  const arr = [];
+  for(const t of selectedTraits){
+    let u = null;
+    for(const v of selected[t]){
+      const s = INDEX[t]?.[v]; if(!s) continue;
+      u = unionSets(u, s);
+    }
+    arr.push(u || new Set());
+  }
+  let pool = intersectMany(arr); // null = all
+
+  if(idFilterSet !== null){
+    if(idFilterSet.size===0){ pool = new Set(); }
+    else { pool = pool ? intersectSets(pool, idFilterSet) : new Set(idFilterSet); }
+  }
+
+  results = (pool===null) ? ALL.map(o=>o.id) : Array.from(pool).sort((a,b)=>a-b);
+
+  page = 0;
+  updateSummary();
+  renderActiveChips();
+  renderPage();
+  syncURL();
+  updateAvailability();
+  setupInfiniteScroll();
+
+}
+
+function updateSummary(){
+  summaryEl.textContent = `${results.length} result${results.length===1?'':'s'}`;
+}
+
+/*** Render page ***/
+function renderPage(){
+  const start = page*pageSize;
+  const slice = results.slice(start, start+pageSize);
+  if(page===0) gridEl.innerHTML = '';
+
+  for (const id of slice) {
+    const obj = BY_ID.get(id);
+    if (!obj) continue;
+    const urls = ipfsToUrls(obj.image);
+  
+    const a = document.createElement('article');
+    a.className = 'card';
+  
+function buildReturnURL(id){
+  // 1) Torna alla gallery (tab coerente) e precompila l’ID
+  if (SOURCE_PARAM === 'index') {
+    const u = new URL('./index.html', location.href);
+    u.searchParams.set('id', id);
+    u.searchParams.set('lock', '1');
+    if (TAB_PARAM) u.searchParams.set('tab', TAB_PARAM); // "overlays" | "animated"
+    return { url: u.toString(), label: 'Use this ID' };
+  }
+
+  // 2) PRIORITÀ editor animato se arrivi da lì o hai comp noto
+  if (SOURCE_PARAM === 'editor_animator' || COMP_PARAM || LAST_COMP) {
+    const comp = COMP_PARAM || LAST_COMP;
+    const u = new URL('./editor_animator.html', location.href);
+    if (comp) u.searchParams.set('comp', comp);
+    u.searchParams.set('id', id);
+    u.searchParams.set('lock', '1');
+    return { url: u.toString(), label: 'Cook it!' };
+  }
+
+  // 3) Editor statico (overlay noto)
+  if (SOURCE_PARAM === 'editor' || OVERLAY_PARAM || LAST_OVERLAY) {
+    const ov = OVERLAY_PARAM || LAST_OVERLAY;
+    if (ov) {
+      const u = new URL('./editor.html', location.href);
+      u.searchParams.set('overlay', ov);
+      u.searchParams.set('id', id);
+      u.searchParams.set('lock', '1');
+      return { url: u.toString(), label: 'Cook it!' };
+    }
+  }
+
+  // Default: nessuna CTA
+  return null;
+}
+
+
+
+const ret = buildReturnURL(id);
+const actionHTML = ret ? `<a class="open" href="${ret.url}">${ret.label}</a>` : '';
+
+// Markup card: rendo tutta la thumb cliccabile quando ho un ret.url
+a.innerHTML = `
+  <div class="thumb">
+    ${ret ? `<a class="cover" href="${ret.url}" aria-label="Open"><img loading="lazy" decoding="async" alt="Doodle #${id}"></a>`
+           : `<img loading="lazy" decoding="async" alt="Doodle #${id}">`}
+  </div>
+  <div class="meta">
+    <div class="id">#${id}</div>
+    <div class="actions">
+      ${actionHTML}
+    </div>
+  </div>
+`;
+
+
+
+  const img = a.querySelector('img');
+  attachImgFallback(img, urls);
+  gridEl.appendChild(a);
+}
+
+
+  emptyEl.style.display = (results.length===0) ? '' : 'none';
+
+}
+
+/*** Deep link ***/
+function syncURL(){
+  const sp = new URLSearchParams();
+  for(const [trait,set] of Object.entries(selected)){
+    if(set.size>0) sp.append(trait, Array.from(set).join('|'));
+  }
+  if(idFilterRaw) sp.set('_ids', idFilterRaw);
+  const q = sp.toString();
+  history.replaceState(null, '', q ? ('?'+q) : location.pathname);
+}
+function loadFromURL(){
+  const sp = new URLSearchParams(location.search);
+  selected = {};
+  idFilterRaw = '';
+  idFilterSet = null;
+
+  for(const [key,val] of sp.entries()){
+    if(key === '_ids'){ idFilterRaw = val; continue; }
+    const trait = key;
+    const values = val.split('|').map(s=>s.trim()).filter(Boolean);
+    if(values.length) selected[trait] = new Set(values);
+  }
+
+  for(const cb of filtersEl.querySelectorAll('input[type="checkbox"][data-trait]')){
+    const t = cb.getAttribute('data-trait');
+    const v = cb.getAttribute('data-value');
+    cb.checked = !!(selected[t] && selected[t].has(v));
+  }
+
+  idSearchEl.value = idFilterRaw || '';
+  parseIdQuery(idFilterRaw);
+}
+
+/*** Reset ***/
+function resetFilters(){
+  selected = {};
+  idFilterRaw = '';
+  idFilterSet = null;
+  idSearchEl.value = '';
+  for(const cb of filtersEl.querySelectorAll('input[type="checkbox"]')) cb.checked = false;
+  // pulisci ricerca globale
+  const traitSearchEl = document.getElementById('traitSearch');
+  if (traitSearchEl) traitSearchEl.value = '';
+  GLOBAL_QN = '';
+  updateAvailability();
+
+  applyFilters();
+  setupInfiniteScroll();  // attiva l’infinite scroll
+
+}
+
+/*** Accordion: una sola sezione aperta ***/
+function enableAccordion(){
+  // 1) toggle in CAPTURE: prende l'evento anche se non bubbla (Safari/iOS)
+  filtersEl.addEventListener('toggle', (e) => {
+    const det = e.target;
+    if (!(det instanceof HTMLDetailsElement) || !det.open) return; // solo quando si APRE
+    for (const other of filtersEl.querySelectorAll('details[open]')) {
+      if (other !== det) other.open = false;
+    }
+  }, true);
+
+  // 2) Fallback: chiudi le altre quando clicchi un summary che sta per aprirsi
+  filtersEl.addEventListener('click', (e) => {
+    const sum = e.target.closest('summary');
+    if (!sum) return;
+    const det = sum.parentElement;
+    if (!(det instanceof HTMLDetailsElement)) return;
+    const willOpen = !det.open;
+    if (!willOpen) return; // sta chiudendo: lascia stare
+    for (const other of filtersEl.querySelectorAll('details[open]')) {
+      if (other !== det) other.open = false;
+    }
+  });
+}
+/*** Infinite scroll ***/
+function setupInfiniteScroll(){
+  const sentinel = document.getElementById('sentinel');
+
+  // pulizia precedente
+  if (io){ io.disconnect(); io = null; }
+
+  if (!sentinel || !('IntersectionObserver' in window)) return;
+
+  io = new IntersectionObserver((entries) => {
+    if (!entries.some(e => e.isIntersecting)) return;
+    const hasMore = ((page+1)*pageSize < results.length);
+    if (!hasMore || ioBusy) return;
+    ioBusy = true;
+    page++;
+    renderPage();
+    requestAnimationFrame(() => { ioBusy = false; });
+  }, { root: null, rootMargin: '800px 0px', threshold: 0.01 });
+
+  io.observe(sentinel);
+}
+
+/*** Events ***/
+  
+// Per-trait search (always hides impossible)
+filtersEl.addEventListener('input', e=>{
+  if (e.target && e.target.matches('.filter-search')){
+    const q = norm(e.target.value);
+    const wrap = e.target.closest('details');
+    const labels = wrap.querySelectorAll('.values label');
+
+    for (const lbl of labels){
+      const val = norm(lbl.dataset.value || '');
+      const impossible = lbl.dataset.impossible === '1';
+      const show = (!q || val.includes(q)) && !impossible;
+      lbl.style.display = show ? '' : 'none';
+    }
+
+    // nascondi il gruppo se nessuna label è visibile
+    let visibleInGroup = 0;
+    for (const lbl of labels){
+      if (lbl.style.display !== 'none') visibleInGroup++;
+    }
+    wrap.classList.toggle('is-hidden', visibleInGroup === 0);
+
+    // riallinea rispetto alla ricerca GLOBALE
+    updateAvailability();
+  }
+});
+
+
+// Checkbox change
+filtersEl.addEventListener('change', e=>{
+  const cb = e.target;
+  if(cb && cb.matches('input[type="checkbox"][data-trait]')){
+    const trait = cb.getAttribute('data-trait');
+    const value = cb.getAttribute('data-value');
+    const set = (selected[trait]||(selected[trait]=new Set()));
+    if(cb.checked) set.add(value); else set.delete(value);
+    if(set.size===0) delete selected[trait];
+    applyFilters();
+  }
+});
+
+
+// ID search (solo numeri, virgole, spazi e trattini)
+idSearchEl.addEventListener('input', ()=>{
+  const v = idSearchEl.value;
+  let s = v.replace(/\D+/g, ''); // solo cifre
+  // normalizza trattini/virgole ripetuti e spazi multipli
+  s = s.replace(/-{2,}/g, '-').replace(/,{2,}/g, ',').replace(/\s{2,}/g, ' ');
+  if (s !== v) {
+    const pos = idSearchEl.selectionStart || s.length;
+    idSearchEl.value = s;
+    // prova a mantenere il caret più o meno in posizione
+    try { idSearchEl.setSelectionRange(pos - (v.length - s.length), pos - (v.length - s.length)); } catch {}
+  }
+  parseIdQuery(idSearchEl.value);
+  applyFilters();
+});
+
+
+// Active chip remove
+activeChipsEl.addEventListener('click', (e)=>{
+  const chip = e.target.closest('.chip-active');
+  if(!chip) return;
+  const type = chip.getAttribute('data-type');
+  const trait = chip.getAttribute('data-trait');
+  const value = chip.getAttribute('data-value');
+
+  if(type === 'ids'){
+    idFilterRaw = '';
+    idFilterSet = null;
+    idSearchEl.value = '';
+  }else if(type === 'trait'){
+    const set = selected[trait];
+    if(set){
+      set.delete(value);
+      if(set.size === 0) delete selected[trait];
+    }
+    for(const cb of filtersEl.querySelectorAll('input[type="checkbox"][data-trait]')){
+      if(cb.getAttribute('data-trait') === trait && cb.getAttribute('data-value') === value){
+        cb.checked = false;
+        break;
+      }
+    }
+  }
+  applyFilters();
+});
+
+// Pagination + reset
+resetBtn.addEventListener('click', resetFilters);
+// --- clear buttons inside inputs (iOS-safe) ---
+function wireClear(inputId, afterClear){
+  const inp = document.getElementById(inputId);
+  const btn = document.querySelector(`[data-clear-for="${inputId}"]`);
+  if(!inp || !btn) return;
+
+  const toggle = () => btn.classList.toggle('show', !!inp.value);
+  inp.addEventListener('input', toggle);
+
+  btn.addEventListener('click', () => {
+    inp.value = '';
+    inp.focus();
+    inp.dispatchEvent(new Event('input', { bubbles:true })); // trigga i tuoi listener
+    if (afterClear) afterClear();
+  });
+
+  toggle(); // stato iniziale
+}
+
+
+/*** Init ***/
+(async function init(){
+  const ok = await loadMeta();
+  if(!ok) return;
+  renderFilters();
+  enableAccordion();      // una sola sezione aperta
+  loadFromURL();
+  applyFilters();         // popola griglia + contatori (opzioni e summary)
+  // --- clear buttons hook (iOS/PWA friendly)
+  wireClear('traitSearch', () => { GLOBAL_QN = ''; updateAvailability(); });
+  wireClear('idSearch');
+  // --- Global trait search wiring ---
+  const traitSearchEl = document.getElementById('traitSearch');
+  let tSearch = 0;
+  
+  function applyGlobalSearch(){
+    GLOBAL_QN = norm(traitSearchEl.value);
+    updateAvailability();
+  }
+  
+  if (traitSearchEl){
+    traitSearchEl.addEventListener('input', ()=>{
+      clearTimeout(tSearch);
+      tSearch = setTimeout(applyGlobalSearch, 120);
+    });
+  }
+  
+})();
+</script>
+  
+<script>
+  function backToGallery(){
+    if (document.referrer) {
+      try {
+        const u = new URL(document.referrer);
+        if (u.origin === location.origin) { history.back(); return false; }
+      } catch(_) {}
+    }
+    return true; // fallback: vai a "./"
+  }
+</script>
+  
+</body>
+</html>

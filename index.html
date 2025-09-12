@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ARB8i Lab — Gallery</title>
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles/common.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f1115">
+
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Doodles">
+
+<!-- libreria condivisa: mountIdRow, initIdControl, normalizeId, createIdPreview -->
+
+<script src="./scripts/common.js?v=3"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  }
+</script>
+
+<style>
+  :root{
+    /* solo variabili/parametri usati QUI (non in common) */
+    --footer-space: calc(44px + env(safe-area-inset-bottom));
+    --card-w:256px;
+    --gap:18px;
+
+    /* params sheen chip */
+    --sheen-width:56px;
+    --sheen-alpha:.18;
+    --sheen-angle:-14deg;
+    --sheen-from:-120%;
+    --sheen-to:220%;
+    --sheen-dur:5.2s;
+    --sheen-delay:1.2s;
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    min-height:100svh;
+    display:flex;
+    flex-direction:column;
+  }
+  .wrap{ flex:1 0 auto; }
+
+  /* hero */
+  .hero{ text-align:center; margin:8px 0 18px }
+  /* HERO: font fisse */
+  .hero h1{
+    margin:0 0 8px;           /* unifica i due .hero h1 che avevi (6px e 8px) */
+    font-size: 40px;          /* fisso (oppure 2rem se preferisci) */
+    font-weight:600;
+  }
+  .hero p{
+    margin:0;
+    font-size: 14px;          /* fisso */
+    line-height:1.35;
+    color:var(--muted);
+  }
+  .hero .tagline{
+    margin:20px 0 0;
+    font-size: 30px;          /* fisso */
+    line-height:1;
+    color:var(--muted);
+  }
+
+  .hero .sub{ margin-top: 8px !important; }
+
+  /* griglia cards */
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-w), var(--card-w)));
+    gap:var(--gap);
+    justify-content:center;
+    justify-items:center;
+    max-width: calc(3 * var(--card-w) + 2 * var(--gap));
+    margin-inline:auto;
+  }
+
+  /* parti di card specifiche della gallery (il resto sta in common.css) */
+  .thumb{
+	  position:relative;
+	  aspect-ratio:1/1;
+	  background:#0d1016;
+
+	  /* ⬇️ questi due sono la chiave */
+	  overflow: hidden;
+	  border-radius: 12px; /* usa lo stesso raggio delle card, o la tua var */
+	}
+
+  .thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb video{
+  width:100%; height:100%;
+  object-fit:cover; display:block;
+  border-radius:inherit; background:#000;
+}
+  .badge{
+    position:absolute; top:8px; left:8px;
+    padding:4px 8px; border-radius:10px; font-size:11px; font-weight:600;
+    background:#fff; color:#0F1116;
+  }
+  .titlebar{ padding:10px 12px; border-top:1px solid var(--border);
+             background:linear-gradient(0deg, rgba(0,0,0,.45), rgba(0,0,0,.15)); }
+  .name{ font-size:15px; font-weight:600 }
+  .by{ font-size:12px; color:var(--muted) }
+  a.cardlink{ position:absolute; inset:0; display:block; text-decoration:none; color:inherit }
+  .empty{ opacity:.8; text-align:center; border:1px dashed var(--border); border-radius:12px; padding:18px }
+  
+  :root{ --navchip-h: 44px; }
+  /* nav chip sticky (solo gallery) */
+  .navchip-bar{
+    position: fixed;                          /* ← era sticky/flex */
+    top: calc(env(safe-area-inset-top) + 12px);
+    left: 0;                                  /* ← ancora ai bordi */
+    right: 0;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .navchip{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:8px 14px; border-radius:999px;
+    background: rgba(23,26,33,.85);
+    background: color-mix(in oklab, var(--card) 85%, transparent);
+    border:1px solid var(--border);
+    backdrop-filter: blur(8px);
+    box-shadow:0 8px 24px rgba(0,0,0,.35);
+    font:600 14px/1 'Fredoka', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    color:var(--text); text-decoration:none; white-space:nowrap;
+    transition:border-color .15s ease, color .15s ease, transform .05s ease;
+    position:relative; overflow:hidden;
+    background: none !important; 
+  }
+  .navchip:hover{ color:var(--acc); border-color:var(--acc); }
+  .navchip:active{ transform: translateY(1px); }
+  /* spinge i contenuti sotto la barra (titolo non si sovrappone) */
+  .wrap{
+    padding-top: calc(env(safe-area-inset-top) + 12px + var(--navchip-h));
+  }
+
+  
+/* Runner di luce che percorre il bordo (trigger: .grid.highlight) */
+
+/* l’SVG sta sopra la card, ma non intercetta click */
+.card{ position:relative; overflow:hidden; }
+.card .runner{
+  position:absolute;
+  inset:-2px;                  /* abbraccia leggermente fuori per non “tagliare” */
+  width:calc(100% + 4px);
+  height:calc(100% + 4px);
+  pointer-events:none;
+  z-index:2;
+}
+
+/* aspetto della traccia luminosa */
+.card .runner rect{
+  fill:none;
+  stroke-width: 2.5;           /* spessore luce */
+  stroke-linejoin: round;
+  stroke-linecap: round;
+
+  /* segmento visibile + gap lungo il perimetro normalizzato (100) */
+  stroke-dasharray: 100 0;     /* 10% luce, 90% gap */
+  stroke-dashoffset: 100;      /* parte “fuori campo” */
+
+  opacity:0;
+  filter: drop-shadow(0 0 8px rgba(138,180,255,.55));
+}
+
+.grid.highlight .card .runner rect{
+  animation:
+    runnerFade 1.6s ease-out forwards,
+    runnerLap  1.6s linear forwards;
+  animation-delay: var(--delay, 0ms), var(--delay, 0ms);
+
+}
+
+
+
+/*questa serve?*/
+@media (max-width:360px){
+  .grid.highlight .card .runner rect { --delay: 0ms; }
+}
+
+/* animazioni */
+@keyframes runnerFade{
+  0%   { opacity:0 }
+  12%  { opacity:1 }
+  70%  { opacity:1 }
+  100% { opacity:0 }
+}
+@keyframes runnerLap{
+  from { stroke-dashoffset: 100 }  /* 100% del giro da fare */
+  to   { stroke-dashoffset: 0 }    /* segmento arriva dove ha iniziato */
+}
+
+/* rispetto accessibilità: niente movimento per chi riduce */
+@media (prefers-reduced-motion:reduce){
+  .grid.highlight .card .runner rect{
+    animation: runnerFade 0.8s ease-out both; /* solo fade, niente corsa */
+  }
+}
+
+
+</style>
+
+</head>
+<body>
+  <div class="navchip-bar">
+    <a class="navchip" data-tab="overlays" href="./index.html?tab=overlays" title="Overlays">Overlays</a>
+    <a class="navchip" data-tab="animated" href="./index.html?tab=animated" title="Animated">Animated</a>
+    <a class="navchip" href="./Doodles_trait-viewer.html?source=index" title="Trait Viewer">Trait Viewer</a>
+  </div>
+
+  
+    <main class="wrap">
+      <header class="hero">
+        <h1 class="brand">
+          <span>ARB8i</span>
+          <img src="icons/HeARt.svg" alt="" class="brand-heart" aria-hidden="true">
+          <span>Lab</span>
+        </h1>
+
+      
+      <div class="hero-id">
+        <label for="idField" class="form-label">Doodles ID</label>
+      
+        <div class="hero-id-row">
+          <!-- Host dove montiamo preview+input (e NON il bottone) -->
+          <div id="idRowHost"></div>
+      
+          <!-- Contenitore del bottone + popover (il bottone verrà montato qui) -->
+          <div class="id-cta">
+          </div>
+        </div>
+      
+        <p class="sub" style="margin:6px 0 0">
+          Missing your Doodle ID?
+          <a id="tvLink" class="back shimmer idhelp" href="./Doodles_trait-viewer.html?source=index">Find it here!</a>
+        </p>
+        
+        <p id="idError" class="id-error" role="status" aria-live="polite" style="display:none"></p>
+      </div>
+     
+    </header>
+
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty" style="display:none">Nessun overlay nel manifest.</div>
+  </main>
+
+  <div class="footer-madeby">
+    <a class="shimmer madeby-link" href="https://x.com/robottiandrea" target="_blank" rel="noopener">
+      made by&nbsp;<span>ARB8i</span>–<span>@robottiandrea</span>
+    </a>
+  </div>
+
+<script>
+/* ====== DOM ====== */
+const GRID = document.getElementById('grid');
+const EMPTY = document.getElementById('empty');
+const idError = document.getElementById('idError');
+
+/* ====== UI helpers ====== */
+// Ruota un <linearGradient> da 0 a 360° in "dur" ms (fallback senza SMIL)
+function spinGradient(gradEl, dur = 1600){
+  if (!gradEl) return;
+  const t0 = performance.now();
+  function tick(now){
+    const p = Math.min(1, (now - t0) / dur);
+    const angle = 360 * p;
+    gradEl.setAttribute('gradientTransform', `rotate(${angle} 0.5 0.5)`);
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+  
+function nudgeGrid(){
+  if(!GRID) return;
+  GRID.classList.remove('highlight');
+  void GRID.offsetWidth;
+  GRID.classList.add('highlight');
+
+  // avvia la rotazione rainbow su TUTTI i gradient delle card
+ document.querySelectorAll('.runner animateTransform')
+  .forEach(a => a.beginElement());
+
+}
+
+function showPopover(msg){
+  showCenterPop(msg, '', 1600);
+  // Resta l’effetto “onda” sulla griglia dopo la scomparsa del popup
+  setTimeout(() => startShowcase({ dur: 1600, stagger: 120 }), 1700);
+
+}
+// 1° giro in sequenza, poi TUTTO STOP
+function startShowcase({dur = 1600, stagger = 120} = {}){
+  const cards = Array.from(document.querySelectorAll('#grid .card'));
+  if (!GRID || !cards.length) return;
+
+  // Sequenza: assegno i ritardi per-card
+  cards.forEach((card, i) => card.style.setProperty('--delay', `${i * stagger}ms`));
+
+  // Avvio giro: ri-triggero le animazioni + faccio girare il gradient SOLO per 'dur'
+  GRID.classList.remove('highlight');
+  void GRID.offsetWidth;
+  GRID.classList.add('highlight');
+
+  document.querySelectorAll('.runner linearGradient')
+    .forEach(g => spinGradient(g, dur)); // 1 sola rotazione del rainbow
+
+  // Alla fine del giro totale: pulizia e STOP
+  const total = dur + stagger * Math.max(0, cards.length - 1);
+  setTimeout(() => {
+    // tolgo i delay così, se in futuro ri-lanci, riparte da zero
+    cards.forEach(card => card.style.removeProperty('--delay'));
+    // tolgo highlight per evitare qualunque ri-trigger accidentale
+    GRID.classList.remove('highlight');
+  }, total + 50);
+}
+
+function bootThumbVideos(){
+  const vids = document.querySelectorAll('.thumbvid');
+  if (!vids.length || !('IntersectionObserver' in window)) return;
+
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      const v = e.target;
+      if (e.isIntersecting && !reduce){
+        v.muted = true;      // vecchi WebKit
+        v.playsInline = true;
+        v.play().catch(()=>{});
+      } else {
+        v.pause();
+      }
+    });
+  }, { root:null, rootMargin:'120px 0px', threshold:0.2 });
+
+  vids.forEach(v=>io.observe(v));
+}
+
+
+
+/* ====== Overlays grid ====== */
+let overlays = null;
+
+function cardHTML(item, isAnimated){
+  // URL di destinazione in base alla tab
+  const href = new URL(isAnimated ? 'editor_animator.html' : 'editor.html', location.href);
+  if (isAnimated) href.searchParams.set('comp', item.id);
+  else            href.searchParams.set('overlay', item.id);
+
+  const gradId = `rg-${item.id}`;
+  const thumb  = item.thumb || `thumbs/${item.id}.png`;
+  const badge  = item.badge ? `<div class="badge" style="${item.badgeColor ? `background:${item.badgeColor}` : ''}">${item.badge}</div>` : '';
+  const by     = item.author ? `<div class="by">by ${item.author}</div>` : '';
+
+  return `
+  <article class="card">
+    <div class="thumb">
+      ${badge}
+		 ${item.preview && item.preview.mp4
+		  ? `<video class="thumbvid" muted playsinline autoplay loop preload="metadata"
+					poster="${(item.preview && item.preview.poster) || thumb}"
+					src="${item.preview.mp4}"></video>`
+		  : `<img loading="lazy" src="${thumb}" alt="${item.name || item.id}" />`
+		}
+
+
+    </div>
+    <svg class="runner" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+          <stop offset="0%"   stop-color="#A4A4F4"/>
+          <stop offset="16%"  stop-color="#FFB0DD"/>
+          <stop offset="33%"  stop-color="#FFBE88"/>
+          <stop offset="50%"  stop-color="#FFE6A1"/>
+          <stop offset="66%"  stop-color="#8FEACC"/>
+          <stop offset="83%"  stop-color="#92D0FF"/>
+          <stop offset="100%" stop-color="#A4A4F4"/>
+          <animateTransform attributeName="gradientTransform" type="rotate"
+            from="0 0.5 0.5" to="360 0.5 0.5" dur="1.6s" begin="indefinite" repeatCount="indefinite" fill="freeze" />
+        </linearGradient>
+      </defs>
+      <rect x="1" y="1" width="98" height="98" rx="6" ry="6" pathLength="100"
+            stroke="url(#${gradId})" fill="none" vector-effect="non-scaling-stroke" />
+    </svg>
+    <div class="titlebar">
+      <div class="name">${item.name || item.id}</div>
+      ${by}
+    </div>
+    <a class="cardlink" href="${href.toString()}"></a>
+  </article>`;
+}
+
+
+
+
+function updateCardLinksWithId(id){
+  document.querySelectorAll('a.cardlink').forEach(a=>{
+    const u = new URL(a.getAttribute('href'), location.href);
+    if(id==null){ u.searchParams.delete('id'); }
+    else{ u.searchParams.set('id', id); }
+    a.setAttribute('href', u.toString());
+  });
+}
+
+function render(){
+  if(!overlays || !overlays.items || overlays.items.length===0){
+    GRID.innerHTML = '';
+    if (EMPTY) EMPTY.style.display = '';
+    return;
+  }
+  if (EMPTY) EMPTY.style.display = 'none';
+  GRID.innerHTML = overlays.items.map((item, i) => cardHTML(item, IS_ANIMATED)).join('');
+  bootThumbVideos();
+  document.querySelectorAll('#grid .card').forEach((card, i) => {
+    card.style.setProperty('--delay', `${i * 120}ms`); // 120ms tra una card e la successiva
+  });
+  const active = (OCNS && typeof OCNS.normalizeId === 'function')
+  ? OCNS.normalizeId(localStorage.getItem('lastId'), 9999)
+  : { valid:false };
+updateCardLinksWithId(active.valid ? active.value : null);
+
+}
+/* ====== Riga ID condivisa: mount + init ====== */
+const OCNS = window.OC;
+
+if (OCNS && typeof OCNS.mountIdRow === 'function') {
+  OCNS.mountIdRow('#idRowHost', {
+    inputId: 'idField',
+    previewId: 'idPreview',
+    buttonId: 'idApplyBtn',
+    buttonText: 'It’s me!',
+    buttonClass: 'id-btn',
+    buttonContainer: '.id-cta',
+    showPreview: true,
+    placeholder: '8929',
+    maxLen: 4
+  });
+} else {
+  console.warn('OC.mountIdRow non disponibile.');
+}
+
+let idCtrl = null;
+if (OCNS && typeof OCNS.initIdControl === 'function') {
+  idCtrl = OCNS.initIdControl({
+    input: '#idField',
+    preview: '#idPreview',
+    button: '#idApplyBtn',
+    defaultId: '8929',
+    max: 9999,
+    persistKey: 'lastId',
+    urlParam: 'id',
+    cleanUrlParam: true,
+    linkUpdater: updateCardLinksWithId,
+    onApply(id){
+      updateCardLinksWithId(id);
+      showPopover('Locked in! Pick a card!');
+    },
+    onValidChange(valid, st){
+      updateCardLinksWithId(valid ? st.value : null);
+    }
+  });
+} else {
+  console.warn('OC.initIdControl non disponibile.');
+}
+/* ===== Popup centrale helpers ===== */
+function showCenterPop(title, desc = '', autoHideMs = 1600){
+  const el = document.getElementById('centerPop');
+  const t  = document.getElementById('cpTitle');
+  const d  = document.getElementById('cpDesc');
+  if(!el || !t || !d) return;
+
+  t.textContent = title || '';
+  d.textContent = desc || '';
+  d.style.display = desc ? '' : 'none';
+
+  el.style.display = 'flex';
+
+  if (autoHideMs > 0){
+    clearTimeout(showCenterPop._t);
+    showCenterPop._t = setTimeout(hideCenterPop, autoHideMs);
+  }
+}
+function hideCenterPop(){
+  const el = document.getElementById('centerPop');
+  if (el) el.style.display = 'none';
+}
+// opzionale: chiudi toccando lo sfondo
+document.getElementById('centerPop')?.addEventListener('click', hideCenterPop);
+
+window.addEventListener('DOMContentLoaded', () => {
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('lock') === '1') {
+    showPopover('Locked in! Pick a card!');
+
+    // pulizia: togli 'lock' dall'URL per non ri-triggerare al refresh
+    qs.delete('lock');
+    const clean = qs.toString();
+    history.replaceState(null, '', location.pathname + (clean ? '?' + clean : ''));
+  }
+});
+// Quale tab? (già nel tuo file)
+const qsTab = new URLSearchParams(location.search).get('tab');
+const TAB = (qsTab || 'overlays').toLowerCase();
+const IS_ANIMATED = TAB === 'animated';
+
+// ——— Allinea i link al Trait Viewer con la tab corrente
+(function setViewerLinks(){
+  const u = new URL('./Doodles_trait-viewer.html', location.href);
+  u.searchParams.set('source','index');           // il viewer saprà che deve tornare qui
+  u.searchParams.set('tab', TAB);                 // "overlays" o "animated"
+  const href = u.toString();
+
+  // 1) Nav chip "Trait Viewer"
+  const navTv = document.querySelector('.navchip-bar a[title="Trait Viewer"]');
+  if (navTv) navTv.href = href;
+
+  // 2) Link "Find it here!"
+  const tvLink = document.getElementById('tvLink');
+  if (tvLink) tvLink.href = href;
+})();
+
+
+// (opzionale) evidenzia la tab corrente
+requestAnimationFrame(() => {
+  document.querySelectorAll('.navchip-bar .navchip[data-tab]').forEach(a => {
+    const t = a.getAttribute('data-tab');
+    if ((IS_ANIMATED && t === 'animated') || (!IS_ANIMATED && t === 'overlays')) {
+      a.classList.add('active');
+      a.setAttribute('aria-current','page');
+    } else {
+      a.classList.remove('active');
+      a.removeAttribute('aria-current');
+    }
+  });
+});
+
+
+/* ====== Manifest overlays ====== */
+async function loadManifest(){
+  const urls = IS_ANIMATED
+    ? ['./overlays/animated.json', './animated.json']
+    : ['./overlays/overlays.json', './overlays.json'];
+
+  for (const url of urls){
+    try{
+      const r = await fetch(url, { cache:'no-cache' });
+      if (r.ok){ overlays = await r.json(); return; }
+    }catch{}
+  }
+  overlays = { items: [] };
+}
+
+
+loadManifest().then(render).catch(()=>{ overlays = { items: [] }; render(); });
+</script>
+<!-- Popup centrale (riutilizzabile) -->
+<div id="centerPop" class="center-pop" role="dialog" aria-modal="true" aria-live="assertive" style="display:none">
+  <div class="box">
+    <div id="cpTitle" class="title"></div>
+    <p id="cpDesc" class="desc"></p>
+  </div>
+</div>
+  
+</body>
+</html>

@@ -1,0 +1,352 @@
+/* ========== Tema & base ========== */
+:root{
+  --bg:#0f1115; --card:#171a21; --text:#eef2ff; --muted:#9aa3b2;
+  --acc:#8ab4ff; --border:#232938;
+
+  /* controlli */
+  --ctrl-h:40px;
+  --ctrl-br:10px;
+  --ctrl-bw:1px;
+  --ctrl-bc:#fff;        /* bordo bianco come nell'editor */
+}
+
+*{ box-sizing:border-box }
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font:15px/1.45 'Fredoka',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+}
+input,button,select,textarea{ font:inherit; }
+
+/* ========== Header “back” come editor/viewer ========== */
+.header{
+  display:flex; align-items:center; gap:12px;
+  margin:20px 28px 10px;
+}
+/* Link “Find it here!” (accentato) */
+.back{
+  color:var(--acc);
+  text-decoration:none;
+}
+.back:hover{ text-decoration:underline; }
+.header h1{ margin:0; font-size:20px; font-weight:600; }
+/* Riga di testo sotto (stesso stile ovunque) */
+.sub{
+  color:var(--muted);
+  font-size:14px;  /* = editor */
+}
+
+/* ========== Label e link “Find it here!” ========== */
+/* Label sopra l’input ID (uguale in index + editor) */
+.form-label{
+  display:inline-block;
+  margin:0 0 6px;
+  font-weight:600;
+  font-size:14px;
+  color:var(--muted);
+  text-align:center;
+}
+
+/* Piccolo boost al link help (come in editor) */
+.idhelp{
+  font-weight:600;
+  letter-spacing:.2px;
+  margin-left:4px;
+  font-size:14px;
+}
+@media (min-width:640px){
+  .idhelp{ font-size:15px; }
+}
+.idhelp:hover{ text-decoration:underline; }
+
+/* ========== Shimmer comune (testo lucido) ========== */
+.shimmer,
+.shimmer *{
+  --shine-start:rgba(192,192,192,.8);
+  --shine-middle:rgba(255,255,255,1);
+  --shine-end:rgba(192,192,192,.8);
+  background-image:linear-gradient(120deg,
+    var(--shine-start) 40%, var(--shine-middle) 50%, var(--shine-end) 60%
+  );
+  background-size:200% 100%;
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+  -webkit-text-fill-color: transparent; /* utile anche su Safari */
+  animation:shine 8s linear infinite;
+  letter-spacing:.2px;
+}
+@keyframes shine{ 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+@media (prefers-reduced-motion:reduce){ .shimmer, .shimmer *{ animation:none!important } }
+
+/* ========== Footer “made by” ========== */
+.footer-madeby{
+  display:flex; justify-content:center; align-items:center;
+  gap:0; margin:12px 0 16px; padding-bottom: env(safe-area-inset-bottom);
+  white-space:nowrap;
+}
+.madeby-link{ display:inline-flex; align-items:center; gap:0; text-decoration:none; color:inherit; }
+.madeby-link:hover{ text-decoration:underline; }
+
+
+
+/* ========== Controlli & Bottoni (coerenti con editor) ========== */
+.control{
+  width:100%; height:var(--ctrl-h); padding:0 12px; line-height:var(--ctrl-h);
+  border:var(--ctrl-bw) solid var(--ctrl-bc); border-radius:var(--ctrl-br);
+  background:#0d1016; color:var(--text); outline:none; appearance:none; -webkit-appearance:none;
+}
+.control:focus{ box-shadow:0 0 0 2px rgba(138,180,255,.25); }
+
+.btn{
+  height:var(--ctrl-h); line-height:var(--ctrl-h);
+  padding:0 14px; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  border:1px solid var(--border); border-radius:var(--ctrl-br);
+  background:#0d1016; color:var(--text); cursor:pointer; white-space:nowrap;
+  font-weight:600;
+}
+.btn-primary{ background:linear-gradient(180deg,#2b62ff,#2753d7); border:0; color:#fff; }
+.btn-outline{
+  height:var(--ctrl-h); line-height:var(--ctrl-h);
+  padding:0 16px; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  border:var(--ctrl-bw) solid var(--ctrl-bc); border-radius:var(--ctrl-br);
+  background:transparent; color:#fff; cursor:pointer; white-space:nowrap; font-weight:500;
+  transition:all .2s ease-in-out;
+}
+.btn-outline:hover:enabled{ background:#fff; color:#000; }
+.btn:disabled, .btn-outline:disabled{ opacity:.5; cursor:not-allowed; }
+
+/* ========== Card base condivisa (gallery & viewer) ========== */
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:16px;
+  overflow:hidden; position:relative; box-shadow:0 10px 30px rgba(0,0,0,.25);
+  transition:transform .08s ease, box-shadow .08s ease;
+}
+.card:hover{ transform:translateY(-2px); box-shadow:0 16px 36px rgba(0,0,0,.35) }
+.thumb{ aspect-ratio:1/1; background:#0d1016; }
+.thumb img{ width:100%; height:100%; object-fit:cover; display:block }
+.meta{ padding:8px 10px; display:flex; align-items:center; justify-content:space-between; gap:8px; border-top:1px solid var(--border) }
+.open{
+  font-size:12px; border-radius:9px; padding:6px 10px;
+  border:1px solid var(--border); background:#0d1016; color:var(--text); text-decoration:none;
+}
+
+/* ========== Chips base ========== */
+.chip{ background:#0d1016; border:1px solid var(--border); color:var(--muted); padding:6px 10px; border-radius:999px; font-size:12px }
+/* ========== ID row condivisa (preview SX + input con X + bottone) ========== */
+
+:root{ --id-width:112px; }  /* 4 cifre */
+
+
+.id-row{
+  display:grid;
+  grid-template-columns: auto var(--id-width) auto;
+  gap:10px;
+  align-items:center;
+  justify-content:center;
+}
+
+/* Input numerico “ID” */
+.id-input{
+  width:var(--id-width);
+  height:40px;
+  padding:0 12px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:#0d1016;
+  color:var(--text);
+  font-size:16px;
+  font-variant-numeric:tabular-nums;
+  text-align:center;
+}
+.id-input.error{ border-color:#ff4d4f; box-shadow:0 0 0 2px rgba(255,77,79,.2); }
+
+/* Wrapper per la X interna (stile come Trait Viewer) */
+.input-clear{ position:relative; }
+.input-clear .id-input{ padding-right:34px; }
+.clear-btn{
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  width:32px; height:32px; padding:0; border:0; background:transparent;
+  border-radius:0; display:none; cursor:pointer;
+}
+.clear-btn.show{ display:block; }
+.clear-btn::before{
+  content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:14px; height:14px;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M1 1L13 13M13 1L1 13" stroke="%23b8bec9" stroke-width="2" stroke-linecap="round"/></svg>')
+             no-repeat center;
+  opacity:.85;
+}
+.clear-btn:hover::before{ opacity:1; }
+.clear-btn:focus-visible{ outline:2px solid #2b62ff; outline-offset:2px; border-radius:6px; }
+
+/* Mini-anteprima tonda a sinistra */
+.id-preview{
+  width:40px; height:40px; border-radius:50%; overflow:hidden;
+  border:1px solid var(--border); background:#0d1016;
+  box-shadow:0 6px 16px rgba(0,0,0,.25); position:relative;
+}
+.id-preview img{ width:100%; height:100%; object-fit:cover; object-position:50% 35%; display:block; }
+.id-preview .id-badge{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font:600 12px/1 '',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  color:var(--muted);
+}
+.id-preview.loading::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.14), rgba(255,255,255,0.06));
+  background-size:200% 100%; animation:shine 1.8s linear infinite;
+}
+:root{
+  --id-width:112px;     /* o quanto usi */
+  --id-preview:40px;    /* diametro mini-anteprima */
+  --id-gap:0px;         /* spazio tra preview / input / bottone */
+}
+
+:root{
+  --id-width:112px;    /* o quanto preferisci */
+  --id-preview:40px;   /* diametro mini-anteprima */
+  --id-gap:8px;        /* spazio tra le colonne */
+}
+
+/* Griglia complessiva (label sopra, poi riga a 3 colonne) */
+.hero-id{
+  display:grid;
+  grid-template-columns: var(--id-preview) var(--id-width) auto; /* preview | input | bottone */
+  row-gap:6px;
+  column-gap: var(--id-gap);
+  justify-content:center;
+  align-items:center;
+  width:fit-content;
+  max-width:100%;
+  margin:0 auto;
+}
+.hero-id{ row-gap: 0px; }          /* stringe label ↔ controlli */
+.hero-id .sub{ margin-top: 6px; }  /* mantiene spazio controlli ↔ help */
+
+/* Label sopra l'INPUT (colonna 2), allineata a sinistra */
+.hero-id .form-label{
+  grid-column:2;
+  grid-row:1;
+  justify-self:start;
+  text-align:left;
+  width: var(--id-width);
+  margin:0;
+}
+
+/* --- Riga controlli: stessa griglia a 3 colonne --- */
+.hero-id-row{
+  grid-column:1 / -1;
+  grid-row:2;
+
+  display:grid;
+  grid-template-columns: var(--id-preview) var(--id-width) auto;
+  column-gap: var(--id-gap);
+  align-items:center;
+  justify-content:center;
+}
+
+/* 🔧 Appiattiamo ENTRAMBI i wrapper creati da OC */
+#idRowHost,
+#idRowHost > .id-row{
+  display: contents;
+}
+
+/* Colonna 1 = mini-anteprima */
+#idRowHost .id-preview{
+  grid-column:1;
+  width:var(--id-preview);
+  height:var(--id-preview);
+}
+
+/* Colonna 2 = input (il wrapper dell’input è .input-clear) */
+#idRowHost .input-clear{ grid-column:2; }
+
+/* Colonna 3 = bottone */
+.hero-id-row .id-cta{
+  grid-column:3;
+  display:flex; align-items:center; justify-content:center;
+  white-space:nowrap;
+}
+
+/* Help e (se presente) errore restano sotto */
+.hero-id .sub{ grid-column:1 / -1; grid-row:3; text-align:center; }
+.id-error{ grid-column:1 / -1; grid-row:4; text-align:center; margin:6px 0 0; }
+
+ /* Popover del bottone (solo qui) */
+  .id-cta{ position:relative; display:flex; align-items:center; }
+  .id-btn{
+    height:40px; padding:0 14px; margin:0; border-radius:10px; border:1px solid var(--border);
+    background:var(--acc); color:#0f1115; font-weight:700; font-family:'',system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    cursor:pointer; transition:transform .05s ease, filter .15s ease, opacity .15s;
+  }
+  .id-btn:hover{ filter:brightness(1.1); }
+  .id-btn:active{ transform:translateY(1px); }
+  .id-btn:disabled{ opacity:.45; cursor:not-allowed; }
+  /* Popover (più grande, colori invertiti per massima visibilità) */ 
+  /* ===== Popup centrale (riutilizzabile) ===== */
+.center-pop {
+  position: fixed;
+  inset: 0;
+  display: none;                 /* mostrato via JS con display:flex */
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(4px);
+}
+
+.center-pop .box {
+  max-width: min(90vw, 520px);
+  padding: 22px 26px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  text-align: center;
+  animation: popScale .18s ease-out;
+}
+
+.center-pop .title {
+  margin: 0 0 6px;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.center-pop .desc {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+@keyframes popScale {
+  from { transform: scale(.96); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+.brand {
+  display: inline-flex;   
+  align-items: center;
+  gap: .4em;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+}
+
+}
+.brand-heart {
+  height: 1.1em;      /* scala col testo */
+  width: auto;
+  vertical-align: -0.12em; /* micro allineamento */
+}
+/* Forza dimensione fissa del cuore nel titolo */
+.brand img.brand-heart{
+  margin: -0.2em;
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+  object-fit: contain;
+  max-width: none;   /* evita ereditare max-width:100% da reset globali */
+  display: inline-block;
+  vertical-align: -0.12em;
+}
+
