@@ -1,0 +1,24 @@
+{
+  "items": [
+    {
+      "id": "KoreanHeart",
+      "type": "animated",
+      "name": "Korean Heart",
+      "author": "ARB8i",
+      "authorHandle": "robottiandrea",
+      "badge": "NEW",
+      "badgeColor": "#FFFF",
+      "thumb": "thumbs/KoreanHeartAnimated.png",
+      "preview": {
+        "mp4": "thumbs/KoreanHeartAnimated.mp4",
+        "poster": "thumbs/KoreanHeartAnimated.png"
+      },
+      "recipeId": "KoreanHeart_Default",
+      "skinId": "Skin_fill",
+      "sleeveId": "Sleeve_fill",
+      "shadowId": "Shadow_fill",
+      "oopsTraits": ["balloon", "popsicle", "cat"],
+      "oopsMessage": "Pretty sure your dood doesn’t have any hands!"
+    }
+  ]
+}
