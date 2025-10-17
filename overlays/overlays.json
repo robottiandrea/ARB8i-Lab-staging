@@ -13,7 +13,9 @@
       "noRecolor": true,
       "layoutDefaultId": "Overlay_ThingShoulder",
       "layoutAltId": "Overlay_ThingHead",
-      "layoutAltWhen": ["balloon", "popsicle", "icecream", "mullet", "turtleneck"],
+      "layoutAltWhen": ["balloon", "popsicle", "icecream", "mullet", "turtleneck","long","dino","whale","duck"],
+	  "layoutAlt2Id":    "Overlay_ThingCat",               
+	  "layoutAlt2When":  ["cat"],
       "thumb": "thumbs/TheHand.png",
       "oopsTraits": ["cat"],
       "oopsMessage": "Oops",
@@ -76,9 +78,11 @@
       "thumb": "thumbs/Wazzup.png",
       "oopsTraits": ["cat"],
       "oopsMessage": "Oops",
+	  "bgFile": "Overlay_WazzupBackgroud.svg",
+	  "bgLayoutDefaultId": "Overlay_WazzupBackgroud",
       "bgLayoutAltId": null,
-      "useKnockout": false,
-	  "holeMaskRef": ""
+      "useKnockout": true,
+	  "holeMaskRef": "Catrinas"
     },
     {
       "id": "DOODismyDNA",

@@ -465,13 +465,43 @@ function resolveVariantId(svgRoot, baseId, variant){
 }
 
 // ===== BEGIN: LAYOUT HELPERS (add) =====
-function pickLayoutId(cfg, row){
-  const defId = cfg.layoutDefaultId || null;
-  const altId = cfg.layoutAltId || null;
-  const needles = Array.isArray(cfg.layoutAltWhen) ? cfg.layoutAltWhen : [];
-  if (altId && needles.length && rowHasAnyNeedle(row, needles)) return altId;
-  return defId || altId || null;
+// SOSTITUISCI la vecchia pickLayoutId con questa
+function pickLayoutId(cfg, row, prefix = 'layout') {
+  // costruiamo una lista ordinata: default -> alt -> alt2 -> alt3 ...
+  const idDefault   = cfg[`${prefix}DefaultId`] || null;
+
+  const options = [];
+  // default sempre per primo (senza "when")
+  if (idDefault) options.push({ id: idDefault, when: null });
+
+  // raccogli tutte le chiavi tipo `${prefix}AltId`, `${prefix}Alt2Id`, ...
+  const entries = Object.keys(cfg)
+    .filter(k => k.startsWith(`${prefix}Alt`) && k.endsWith('Id'))
+    .map(k => {
+      const base = k.slice(0, -2); // toglie "Id"
+      const whenKey = `${base}When`;
+      return { id: cfg[k], when: cfg[whenKey] };
+    })
+    // mantieni l'ordine Alt, Alt2, Alt3...
+    .sort((a, b) => {
+      const ai = (a.id && a.id.includes('Alt')) ? a.id : '';
+      const bi = (b.id && b.id.includes('Alt')) ? b.id : '';
+      return ai.localeCompare(bi, 'en', { numeric: true });
+    })
+    .filter(o => !!o.id);
+
+  // unisci: default (se c'è) + alt/alt2/alt3...
+  const all = options.concat(entries);
+
+  // cerca la prima ALT con needles che matchano
+  for (const opt of all) {
+    if (!opt.when || !Array.isArray(opt.when) || opt.when.length === 0) continue;
+    if (rowHasAnyNeedle(row, opt.when)) return opt.id;
+  }
+  // se nessuna ALT matcha, prendi il default (se esiste), altrimenti la prima che c’è
+  return idDefault || (entries[0]?.id ?? null);
 }
+
 function showOnlyLayoutGroup(svgRoot, ids, chosenId){
   ids.filter(Boolean).forEach(id=>{
     const el = svgRoot.querySelector('#' + cssEscapeCompat(id));
@@ -495,29 +525,41 @@ function pickMaskLayersForRow(row) {
   // === logica pre-esistente ===
   const isSkelly      = isBody('skelly');
   const isHoodieBody  = isBody('hoodie');
-  const hasCoffeeHead = isHead('coffee');
-  const hasStrawFace  = isFace('straw');
-  const hasPoopieHair = isHair('poopie');
-  const hasHaloHair   = isHair('halo');
-  const hasBalloon    = isHead('balloon');
+  const isCatBody     = isBody('cat');
+  const isCoffeeHead = isHead('coffee');
+  const isStrawFace  = isFace('straw');
+  const isPoopieHair = isHair('poopie');
+  const isHaloHair   = isHair('halo');
+  const isBalloon    = isHead('balloon');
+  
+
+  if (isCatBody) del.push('cat_delete');
 
   if (isSkelly) del.push('skelly_delete');
 
-  if (hasCoffeeHead) {
+  if (isCoffeeHead) {
     if (isHoodieBody) del.push('coffee_hoodie_delete');
     else              del.push('coffee_delete');
   }
 
-  if (hasStrawFace) keep.push('straw_preserve');
+  if (isStrawFace) keep.push('straw_preserve');
 
   // qui la logica richiesta
-  if (hasPoopieHair) {
+  if (isPoopieHair) {
     keep.push(isSkelly ? 'fly_skelly_preserve' : 'fly_preserve');
   }
 
-  if (hasHaloHair) { keep.push('halo_preserve'); del.push('halo_delete'); }
+  // HALO: se hair=halo e body=cat, preserva versione speciale; altrimenti logica standard
+  if (isHaloHair) {
+    if (isCatBody) {
+      keep.push('halo_cat_preserve');  // ⬅️ nuovo caso speciale
+    } else {
+      keep.push('halo_preserve');
+      del.push('halo_delete');
+    }
+  }
 
-  if (hasBalloon) del.push('balloon_delete');
+  if (isBalloon) del.push('balloon_delete');
 
   // === Piercing: hoop (tabella regole) ===
   if (isPiercing('hoop')) {
@@ -723,21 +765,28 @@ function getTraitValue(row, key){
 
 // opzionale: registry per riuso tra carte diverse
 const HOLE_MASKS_BASE = {
-  // lascia questo solo se vuoi usare holeMaskRef
   Catrinas: {
     svgPath: './overlays/masks/Overlay_mask_Catrinas.svg',
-    traitKey: 'face',
-    rules: [
-      { needles: ['sunglasses'], layer: 'sunglasses_hole' },
-      { needles: ['note'],       layer: 'note_hole' },
-      { needles: ['cobain'],     layer: 'cobain_hole' },
-      { needles: ['designer'],   layer: 'designer_hole' },
-      { needles: ['60s'],        layer: '60s_hole' },
-      { needles: ['3d'],         layer: '3d_hole' },
-      { needles: ['love'],       layer: 'love_hole' },
-    ]
+    // stopOnFirst: true,
+    rules: {
+	  body: [
+        { needles: ['cat'], layer: 'cat_hole' },
+      ],
+      face: [
+        { needles: ['sunglasses'], layer: 'sunglasses_hole' },
+        { needles: ['note'],       layer: 'note_hole' },
+        { needles: ['cobain'],     layer: 'cobain_hole' },
+        { needles: ['designer'],   layer: 'designer_hole' },
+        { needles: ['60s'],        layer: '60s_hole' },
+        { needles: ['3d'],         layer: '3d_hole' },
+        { needles: ['love'],       layer: 'love_hole' },
+      ],
+      
+    }
   }
 };
+
+
 
 // prende la config dai campi del JSON della card
 function resolveHoleMaskConf(cfg) {
@@ -747,26 +796,41 @@ function resolveHoleMaskConf(cfg) {
   return null;
 }
 
-function pickHoleMasksForRow(row, holeConf){
-  const conf = holeConf;
-  if (!conf) return { svgPath:null, layerIds:[] };
+// NUOVO FORMATO SOLO: conf = { svgPath, stopOnFirst?, rules:{ face:[...], body:[...], hair:[...], ... } }
+function pickHoleMasksForRow(row, conf){
+  if (!conf || !conf.rules || Array.isArray(conf.rules)) {
+    return { svgPath: conf?.svgPath || null, layerIds: [] };
+  }
 
-  const traitKey = conf.traitKey || 'face';
-  const valRaw = (getTraitValue(row, traitKey) || '').toString();
-  const val = valRaw.trim().toLowerCase();
+  const layerIds = [];
+  const stopOnFirst = !!conf.stopOnFirst;
 
-  // match “contiene” (non uguale): basta che includa una delle needles
-  const hit = (conf.rules || []).find(r =>
-    (r.needles || []).some(n => val.includes(String(n).toLowerCase()))
-  );
+  for (const [traitKey, rules] of Object.entries(conf.rules)) {
+    if (!Array.isArray(rules)) continue;
 
-  return { svgPath: conf.svgPath, layerIds: hit ? [hit.layer] : [] };
+    for (const rule of rules) {
+      const needles = (rule.needles || []).map(String);
+      const hit = needles.some(n => rowHasTrait(row, traitKey, n)); // <- STRICT per trait
+      if (hit && rule.layer) {
+        layerIds.push(rule.layer);
+        if (stopOnFirst) return { svgPath: conf.svgPath, layerIds };
+      }
+    }
+  }
+
+  return { svgPath: conf.svgPath, layerIds };
 }
+
 
 
 // Applica i fori al DOODLE (ctx = contesto del doodle, non quello principale)
 async function applyHoleMasksForCard(ctx, W, H, row, holeConf){
   const { svgPath, layerIds } = pickHoleMasksForRow(row, holeConf);
+  console.log('[holes]', {
+	  svgPath, layerIds,
+	  body: getTraitValue(row,'body'),
+	  face: getTraitValue(row,'face')
+	});
   if (!svgPath || !layerIds.length) return;
 
   const holeSvg = await loadHoleSvg(svgPath);
@@ -808,7 +872,13 @@ async function composeDataUrl(baseBlob, cfg, sleeveSpec, skinSpec, variant, layo
   svg.setAttribute('viewBox', svg.getAttribute('viewBox') || '0 0 1800 1800');
   svg.setAttribute('preserveAspectRatio','xMidYMid meet');
 // ----- BEGIN: layout switch (add) -----
-const _layoutIds = [cfg.layoutDefaultId, cfg.layoutAltId].filter(Boolean);
+const _layoutIds = [
+  cfg.layoutDefaultId,
+  ...(Object.keys(currentCfg || {})
+      .filter(k => k.startsWith('layoutAlt') && k.endsWith('Id'))
+      .map(k => currentCfg[k]))
+].filter(Boolean);
+
 if (_layoutIds.length && layoutId) {
   showOnlyLayoutGroup(svg, _layoutIds, layoutId);
 }
@@ -933,8 +1003,17 @@ const ctx = canvas.getContext('2d');
 if (cfg.bgFile) {
   try {
     const bgSvg = await parseSvgFromFile(cfg.bgFile);
-    const _bgLayoutIds = [cfg.bgLayoutDefaultId, cfg.bgLayoutAltId].filter(Boolean);
-    const bgLayoutId = (typeof pickLayoutId === 'function') ? pickLayoutId(cfg, row) : (cfg.bgLayoutDefaultId || cfg.bgLayoutAltId || null);
+
+    const _bgLayoutIds = [
+      cfg.bgLayoutDefaultId,
+      ...(Object.keys(cfg || {})
+        .filter(k => k.startsWith('bgLayoutAlt') && k.endsWith('Id'))
+        .map(k => cfg[k]))
+    ].filter(Boolean);
+
+    // ✅ prefisso giusto e variabile giusta
+    const bgLayoutId = pickLayoutId(cfg, row, 'bgLayout');
+
     await drawSvgOnCtx(ctx, W, H, bgSvg, bgLayoutId, _bgLayoutIds);
   } catch (e) {
     console.warn('Background draw skipped:', e);
@@ -1202,9 +1281,10 @@ async function openImage(){
 	const skinSpec   = currentCfg.noRecolor ? null : hexSkin;
 	console.log('[compose-call]', {
 	  cfgId: currentCfg?.id,
-	  face: (getTraitValue(row,'face')||'').toString(),
+	  body: (getTraitValue(row,'body')||'').toString(),  // <- body
 	  sleeveSpec, skinSpec, variant, layoutId
 	});
+
 
 	const dataUrl = await composeDataUrl(baseBlob, currentCfg, sleeveSpec, skinSpec, variant, layoutId, row);
 	// ----- END: choose layout + call compose (patched) -----
