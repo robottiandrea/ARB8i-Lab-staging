@@ -17,8 +17,6 @@
 	  "layoutAlt2Id":    "Overlay_ThingCat",               
 	  "layoutAlt2When":  ["cat"],
       "thumb": "thumbs/TheHand.png",
-      "oopsTraits": ["cat"],
-      "oopsMessage": "Oops",
       "bgFile": "Overlay_WednesdayWindow.svg",
       "bgLayoutDefaultId": "Overlay_WednesdayWindow",
       "bgLayoutAltId": null,
@@ -36,8 +34,6 @@
       "noRecolor": true,
       "layoutDefaultId": "Overlay_Catrinas",
       "thumb": "thumbs/Catrinas.png",
-      "oopsTraits": ["cat"],
-      "oopsMessage": "Oops",
       "bgFile": "Overlay_CatrinasBackgroud.svg",
       "bgLayoutDefaultId": "Overlay_CatrinasBackgroud",
       "bgLayoutAltId": null,
@@ -56,8 +52,6 @@
       "noRecolor": true,
       "layoutDefaultId": "Overlay_CatrinasMustaches",
       "thumb": "thumbs/CatrinasMustaches.png",
-      "oopsTraits": ["cat"],
-      "oopsMessage": "Oops",
       "bgFile": "Overlay_CatrinasBackgroud.svg",
       "bgLayoutDefaultId": "Overlay_CatrinasBackgroud",
       "bgLayoutAltId": null,
@@ -76,9 +70,7 @@
       "noRecolor": true,
       "layoutDefaultId": "Overlay_Wazzup",
       "thumb": "thumbs/Wazzup.png",
-      "oopsTraits": ["cat"],
-      "oopsMessage": "Oops",
-	  "bgFile": "Overlay_WazzupBackgroud.svg",
+      "bgFile": "Overlay_WazzupBackgroud.svg",
 	  "bgLayoutDefaultId": "Overlay_WazzupBackgroud",
       "bgLayoutAltId": null,
       "useKnockout": true,
@@ -264,3 +256,4 @@
     }
   ]
 }
+
