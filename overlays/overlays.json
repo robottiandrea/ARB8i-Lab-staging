@@ -2,6 +2,23 @@
   "default": "Mello",
   "items": [
     {
+      "id": "DOODLEJUICE",
+      "name": "DOODLEJUICE",
+      "author": "ⓜⓘⓢⓢⓘⓕⓤⓢⓘⓣ🅰️ ORIGIN🅰️L",
+      "authorHandle": "missifusita",
+      "authorUrl": "https://x.com/missifusita",
+      "badge": "SPOOKY SEASON",
+      "badgeColor": "#FFFF",
+      "file": "Overlay_DOODLEJUICE.svg",
+      "noRecolor": true,        
+      "thumb": "thumbs/DOODLEJUICE.png",
+      "bgFile": "Overlay_DOODLEJUICEbackground.svg",
+      "bgLayoutDefaultId": "Overlay_DOODLEJUICEbackground",
+      "bgLayoutAltId": null,
+      "useKnockout": true,
+	  "holeMaskRef": "Catrinas"
+    },
+	{
       "id": "TheHand",
       "name": "The Hand",
       "author": "ⓜⓘⓢⓢⓘⓕⓤⓢⓘⓣ🅰️ ORIGIN🅰️L",
@@ -20,7 +37,8 @@
       "bgFile": "Overlay_WednesdayWindow.svg",
       "bgLayoutDefaultId": "Overlay_WednesdayWindow",
       "bgLayoutAltId": null,
-      "useKnockout": true
+      "useKnockout": true,
+	  "holeMaskRef": "Catrinas"
     },
 	{
       "id": "Catrinas",
